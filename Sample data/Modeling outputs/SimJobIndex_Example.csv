@@ -1,0 +1,17 @@
+#,Job_ID,WeatherFile,ModelFile,@@light@@,@@lightsched@@,@@roof@@,@@ufac@@
+0,EP_G-T_0-W_0-P1_0-P2_0-P3_0-P4_0,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,15,0.17,0.039,2
+1,EP_G-T_0-W_0-P1_0-P2_0-P3_0-P4_1,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,15,0.17,0.039,6
+2,EP_G-T_0-W_0-P1_0-P2_0-P3_1-P4_0,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,15,0.17,.07,2
+3,EP_G-T_0-W_0-P1_0-P2_0-P3_1-P4_1,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,15,0.17,.07,6
+4,EP_G-T_0-W_0-P1_0-P2_1-P3_0-P4_0,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,15,0.9,0.039,2
+5,EP_G-T_0-W_0-P1_0-P2_1-P3_0-P4_1,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,15,0.9,0.039,6
+6,EP_G-T_0-W_0-P1_0-P2_1-P3_1-P4_0,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,15,0.9,.07,2
+7,EP_G-T_0-W_0-P1_0-P2_1-P3_1-P4_1,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,15,0.9,.07,6
+8,EP_G-T_0-W_0-P1_1-P2_0-P3_0-P4_0,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,21,0.17,0.039,2
+9,EP_G-T_0-W_0-P1_1-P2_0-P3_0-P4_1,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,21,0.17,0.039,6
+10,EP_G-T_0-W_0-P1_1-P2_0-P3_1-P4_0,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,21,0.17,.07,2
+11,EP_G-T_0-W_0-P1_1-P2_0-P3_1-P4_1,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,21,0.17,.07,6
+12,EP_G-T_0-W_0-P1_1-P2_1-P3_0-P4_0,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,21,0.9,0.039,2
+13,EP_G-T_0-W_0-P1_1-P2_1-P3_0-P4_1,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,21,0.9,0.039,6
+14,EP_G-T_0-W_0-P1_1-P2_1-P3_1-P4_0,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,21,0.9,.07,2
+15,EP_G-T_0-W_0-P1_1-P2_1-P3_1-P4_1,USA_CA_San.Francisco.Intl.AP.724940_TMY3.epw,Example_RefBldgPrimarySchoolPost1980_SAN_FRANCISCO.idf,21,0.9,.07,6
