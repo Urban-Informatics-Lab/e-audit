@@ -10,6 +10,8 @@ from sklearn.model_selection import GridSearchCV
 from sklearn import metrics 
 import glob 
 import os
+import re 
+from pathlib import Path  
 
 # the testing in this file tests whether the attribute was classified correctly (0,1) rather than calculating an MSE, because we're selecting between two attribute options
 # we can then calculate a correct classification rate for each method, and for each attribute in the mutli-tree method
@@ -21,6 +23,7 @@ def correct_date_str(d):
   hour = '%02d' % (int(hour) - 1)
   return f' {date}  {hour}:{mins}:{secs}'
 
+# MAKE EXTRACT_datetime into 1 function 
 def extract_datetime(date_str):
   # date_str = correct_date_str(date_str)
   date = datetime.strptime(date_str, ' %m/%d/%Y  %H:%M:%S')
@@ -28,6 +31,9 @@ def extract_datetime(date_str):
 
 def extract_datetime_actual(date_str1):
   date1 = datetime.strptime(date_str1, '%Y-%m-%d %H:%M:%S %Z')
+  # %Z is timezone 
+  # converts a string to a datetime as long as it's in this format 
+  # FOR ME check if the object is a date time or not - check for the actual and simulated data 
   return date1
 
 def time_stats(group):
@@ -66,28 +72,54 @@ def feature_grp_actual(new_group1):
   final_array1 = np.concatenate((numpy_month1, numpy_year1, numpy_week1))
   return final_array1
 
-#read in simulated data - columns = Job_ID, Date.Time, kWh_norm_sf
-path = "/scratch/groups/risheej/abigail-lauren-Sec3C/P3C_csv" #folder where all jEPlus csv outputs are
-meter_files = glob.glob(os.path.join(path, "*.csv"))
+# read in simulated data - columns = Job_ID, Date.Time, kWh_norm_sf
+meter_files_path = input('Enter a directory path for the meter files: ')
+print("meter directory inputed")
+meter_files = glob.glob(os.path.join(meter_files_path, "*.csv"))
 date_str = '12/31/2014'
 start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
 hourly_periods = 8760
 drange = pd.date_range(start, periods=hourly_periods, freq='H')
-#drange = drange.strftime('%m/%d %H:%M:%S')
 df_sim = []
 i=0
+
+J_kWh_conversion = input('The electricity units are in J in the meter files (T/F): ')
+norm_sf_conversion = input('The data is normalized by square footage in the meter files (T/F): ') 
+if norm_sf_conversion == 'F': 
+        sq_ft = input('Enter the square footage: ')
+        sq_ft = int(sq_ft)
+
 for f in meter_files:
     name = os.path.basename(f)
     name = os.path.splitext(name)[0]
+    digits = re.findall('(\d+|\D+)',name)
+    output = [ a for a in digits if a.isnumeric() ]
+    output_str = ''.join(output)
+    output = int(output_str)
     df = pd.read_csv(f)
-    df['Job_ID']=name
+    df['Job_ID']=output
+    print("Output Type: ")
+    print(type(output))
+    print("Output: ")
+    print(output)
     df['Date.Time']=drange
     df = df.rename({'Electricity:Facility': 'Electricity_kWh'}, axis='columns')
-    df['Electricity_kWh']=df['Electricity_kWh']/(3.6e+6) #convert Joules to kWh
-    df['kWh_norm_sf']=df['Electricity_kWh']/73959 #normalize by square footage: Primary School Square Footage = 73959, Secondary School Square Footage = 210887
+
+  # normalize by J or sq footage 
+    if J_kWh_conversion == 'T': 
+        df['Electricity_kWh']=df['Electricity_kWh']/(3.6e+6) 
+    else:
+        df['Electricity_kWh']=df['Electricity_kWh']
+    
+    if norm_sf_conversion == 'F': 
+        df['kWh_norm_sf']=df['Electricity_kWh']/sq_ft #normalize by square footage: Primary School Square Footage = 73959, Secondary School Square Footage = 210887
+    else:
+        df['kWh_norm_sf']=df['Electricity_kWh']
+        print(type(df['kWh_norm_sf']))
     df_sim.append(df)
     del df['Electricity_kWh']  
-df_sim=pd.concat(df_sim)  
+df_sim=pd.concat(df_sim) 
+
 #create time series features for each Job ID 
 grouped_id = df_sim.groupby('Job_ID')
 feature_list = []
@@ -100,20 +132,50 @@ for name, group in list(grouped_id):
 print("simulation data loaded")
 print(df_sim.head)
 
-#import building features
-simjob = pd.read_csv("/scratch/groups/risheej/abigail-lauren-Sec3C/SimJobIndexPrimary.csv")
-simjob = simjob.drop(columns = ['WeatherFile','ModelFile',"#"])
+# get file path for building simulation 
+sim_job_file_path = input('Enter a file path for the building simulation: ')
+print("sim job file inputed")
+if os.path.exists(sim_job_file_path):
+    print('The sim job file exists.')
+
+    with open(sim_job_file_path, 'r', encoding='utf-8-sig') as f:
+        lines = f.readlines()
+
+        print("The sim job file has been read.")
+else:
+    print('The specified sim job file does NOT exist')
+    input('Enter a file path for the building simulation: ')
+
+simjob = pd.read_csv(sim_job_file_path)
+simjob = simjob.drop(columns = ['WeatherFile','ModelFile'])
 simjob_str = simjob.astype(str)
 print("simjob_str columns")
 print(simjob_str.columns)
 building_params = simjob
-building_params["Job_ID"] = building_params["Job_ID"].str.slice(5,13) #keep only the numeric part of the job id for easier matching
-building_params["Job_ID"] = building_params["Job_ID"].astype('int64')
-print("building params")
-print(building_params.head)
+
+# convert building params index to integer 
+for i in building_params.index:
+    digits = re.findall('(\d+|\D+)',building_params['Job_ID'][i])
+    output = [ a for a in digits if a.isnumeric() ]
+    output = ''.join(output)
+    building_params.loc[i, 'Job_ID'] = int(output)
+    print(building_params['Job_ID'][i])
 
 #read in actual data - this should be normalized by square footage, columns = date_time, char_prem_id, kWh_norm_sf
-df_actual_before = pd.read_csv('/scratch/groups/risheej/abigail-lauren-Sec3C/actual_before_2014_309schools.csv') #before retrofits were installed
+print("loading before data")
+df_actual_before_path = input('Enter a file path for the before data: ')
+print("before data inputed")
+if os.path.exists(df_actual_before_path):
+    print('The before data file exists.')
+
+    with open(df_actual_before_path, 'r', encoding='utf-8-sig') as f:
+        lines = f.readlines()
+
+        print("The before data has been read.")
+else:
+    print('The before data file does NOT exist')
+
+df_actual_before = pd.read_csv(df_actual_before_path)
 actual_feat = []
 grouped_actual_before = df_actual_before.groupby('char_prem_id')
 for name, group in list(grouped_actual_before): #create time series features
@@ -121,7 +183,18 @@ for name, group in list(grouped_actual_before): #create time series features
   actual_feat.append(feature_grp_actual(fin_actual))
   actual_feature_before = np.array(actual_feat)
 
-df_actual_after = pd.read_csv('/scratch/groups/risheej/abigail-lauren-Sec3C/actual_after_2017_325schools.csv') #after retrofits were installed
+#read in actual data - after retrofits were installed
+df_actual_after_path = input('Enter a file path for the after data: ')
+if os.path.exists(df_actual_after_path):
+    print('The after data file exists.')
+
+    with open(df_actual_after_path, 'r', encoding='utf-8-sig') as f:
+        lines = f.readlines()
+
+        print("The after data has been read.")
+else:
+    print('The after data file does NOT exist')
+df_actual_after = pd.read_csv(df_actual_after_path)
 actual_feat = []
 grouped_actual_after = df_actual_after.groupby('char_prem_id')
 for name, group in list(grouped_actual_after): #create time series features
@@ -149,29 +222,54 @@ print("kNN y predicted")
 print(y_predicted)
 preds = pd.DataFrame(y_predicted.T, columns = ['Job_ID'])
 truth = pd.DataFrame(y_test.T, columns = ['Job_ID'])
+print("Preds Job-ID:")
+print(preds['Job_ID'])
+print("building_params Job-ID:")
+print(building_params['Job_ID'])
+preds['Job_ID']=preds['Job_ID'].astype(int)
+building_params['Job_ID']=building_params['Job_ID'].astype(int)
+truth['Job_ID']=truth['Job_ID'].astype(int)
 preds = pd.merge(preds, building_params, how="left",on="Job_ID") #merge with actual building parameters to check how close the match was
 truth = pd.merge(truth, building_params, how="left",on="Job_ID")
 print("saving results... (kNN)")
-preds.to_csv(path_or_buf="/scratch/users/lexcell/P3C/kNN_test_preds.csv", index=False) #predictions on test set
-truth.to_csv(path_or_buf="/scratch/users/lexcell/P3C/kNN_test_true.csv", index=False) #truth from test set
+
+# get output directory 
+output_files_path = input('Enter a directory path for the output files: ')
+print(output_files_path + "output file path loaded")
+output_test_path = "/".join([output_files_path, "kNN_test_preds.csv"])
+# create output directory if it does not exist 
+filepath = Path(output_test_path)  
+filepath.parent.mkdir(parents=True, exist_ok=True)  
+
+preds.to_csv(filepath, index=False)
+print("kNN_test_preds saved")
+test_truth = "/".join([output_files_path, "kNN_test_true.csv"])
+truth.to_csv(test_truth, index=False) 
 list_features = list(simjob_str.columns)
 kNN_class_correct = pd.DataFrame(columns=list_features)
 for feature in list_features:
     kNN_class_correct[feature] =  np.array(preds[feature] == truth[feature], dtype=int) #check whether the feature was classified correctly
 kNN_rate = kNN_class_correct.mean() #calculate the correct classification rate for each feature
-kNN_class_correct.to_csv(path_or_buf="/scratch/users/lexcell/P3C/kNN_test_class_correct.csv", index=False) #binary classifications (1 = correct)
-kNN_rate.to_csv(path_or_buf="/scratch/users/lexcell/P3C/kNN_test_rate.csv") #correct classification rate
+
+kNN_class_correct_path = "/".join([output_files_path, "kNN_test_class_correct.csv"])
+kNN_class_correct.to_csv(kNN_class_correct_path, index=False) #binary classifications (1 = correct)
+
+kNN_rate_correct = "/".join([output_files_path, "kNN_test_rate.csv"])
+kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate 
+
 print("kNN test results saved!")
-## predict on actual data and save to csv
+
 kNN_preds_before = pd.DataFrame(columns=["char_prem_id","Job_ID"])
 kNN_preds_before["char_prem_id"] = df_actual_before.char_prem_id.unique()
 kNN_preds_before["Job_ID"] = model.predict(actual_feature_before)
-kNN_preds_before.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/kNN_validation_preds_before.csv",index = False)
+kNN_preds_before_path = "/".join([output_files_path, "kNN_validation_preds_before.csv"])
+kNN_preds_before.to_csv(kNN_preds_before_path, index=False) #binary classifications (1 = correct)
 
 kNN_preds_after = pd.DataFrame(columns=["char_prem_id","Job_ID"])
 kNN_preds_after["char_prem_id"] = df_actual_after.char_prem_id.unique()
 kNN_preds_after["Job_ID"] = model.predict(actual_feature_after)
-kNN_preds_after.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/kNN_validation_preds_after.csv",index = False)
+kNN_preds_after_path = "/".join([output_files_path, "kNN_validation_preds_after.csv"])
+kNN_preds_after.to_csv(kNN_preds_after_path, index=False) #binary classifications (1 = correct)
 print("kNN validation results saved!")
 
 
@@ -214,23 +312,45 @@ for feature in list_features:
     multi_class_test_preds[feature] = y_predicted #predictions on test set
     mult_tree_preds_before[feature] = clf_feature.predict(actual_feature_before) #predictions on pre-retrofit data
     mult_tree_preds_after[feature] = clf_feature.predict(actual_feature_after) #predictions on post-retrofit data
-    multi_class_correct.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_test_class_correct_{}.csv".format(feature),index = False)
-    multi_class_test_preds.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_test_preds_{}.csv".format(feature), index = False)
-    y_test.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_test_true_{}.csv".format(feature), index = False)
+
+    multi_class_correct_path = f"{output_files_path}/multiple_trees_test_class_correct_{feature}.csv"
+    multi_class_correct[[feature]].to_csv(multi_class_correct_path, index=False)
+
+    multi_class_test_preds_path = f"{output_files_path}/multiple_trees_test_preds_{feature}.csv"
+    multi_class_test_preds[[feature]].to_csv(multi_class_test_preds_path, index=False)
+    
+    y_test_path = f"{output_files_path}/multiple_trees_test_true_{feature}.csv"
+    y_test[[feature]].to_csv(y_test_path, index=False)
+
     multiple_trees_rate = multi_class_correct.mean() #correct classification rate
-    multiple_trees_rate.to_csv(path_or_buf="/scratch/users/lexcell/P3C/multiple_trees_test_rate_{}.csv".format(feature))
-    mult_tree_preds_before.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_validation_preds_before_{}.csv".format(feature),index = False)
-    mult_tree_preds_after.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_validation_preds_after_{}.csv".format(feature),index = False)
+    multiple_trees_rate_path = f"{output_files_path}/multiple_trees_test_rate_{feature}.csv"
+    multiple_trees_rate[[feature]].to_csv(multiple_trees_rate_path, index=False)
+
+    multiple_tree_preds_before_path = f"{output_files_path}/multiple_trees_validation_preds_before_{feature}.csv"
+    mult_tree_preds_before[[feature]].to_csv(multiple_tree_preds_before_path, index=False)
+
+    multiple_tree_preds_after_path = f"{output_files_path}/multiple_trees_validation_preds_after_{feature}.csv"
+    mult_tree_preds_after[[feature]].to_csv(multiple_tree_preds_after_path, index=False)
 #save all of the results (for each feature tree) in one file
 print("saving results...(trees)")
-multi_class_correct.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_test_class_correct.csv",index = False)
-multi_class_test_preds.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_test_preds.csv", index = False)
-y_test.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_test_true.csv", index = False)
+
+multi_class_correct_path = "/".join([output_files_path, "multiple_trees_test_class_correct.csv"])
+multi_class_correct.to_csv(multi_class_correct_path, index=False)
+multi_class_test_preds_path = "/".join([output_files_path, "multiple_trees_test_preds.csv"])
+multi_class_test_preds.to_csv(multi_class_test_preds_path, index=False)
+y_test_preds_path = "/".join([output_files_path, "multiple_trees_test_true.csv"])
+y_test.to_csv(y_test_preds_path, index=False)
 multiple_trees_rate = multi_class_correct.mean()
-multiple_trees_rate.to_csv(path_or_buf="/scratch/users/lexcell/P3C/multiple_trees_test_rate.csv")
+multiple_trees_rate_path = "/".join([output_files_path, "multiple_trees_test_rate.csv"])
+multiple_trees_rate.to_csv(multiple_trees_rate_path, index=False)
 print("trees test results saved!")
+
 mult_tree_preds_before["char_prem_id"] = df_actual_before.char_prem_id.unique()
-mult_tree_preds_before.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_validation_preds_before.csv",index = False)
+mult_tree_preds_before_path = "/".join([output_files_path, "multiple_trees_validation_preds_before.csv"])
+mult_tree_preds_before.to_csv(path_or_buf = mult_tree_preds_before_path, index=False)
+
 mult_tree_preds_after["char_prem_id"] = df_actual_after.char_prem_id.unique()
-mult_tree_preds_after.to_csv(path_or_buf = "/scratch/users/lexcell/P3C/multiple_trees_validation_preds_after.csv",index = False)
+mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds_after.csv"])
+mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
 print("trees validation results saved!")
+
