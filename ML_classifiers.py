@@ -14,7 +14,6 @@ import re
 from pathlib import Path  
 
 # the testing in this file tests whether the attribute was classified correctly (0,1) rather than calculating an MSE, because we're selecting between two attribute options
-# we can then calculate a correct classification rate for each method, and for each attribute in the mutli-tree method
 
 def correct_date_str(d):
   # '_mm/dd__hh:mm:ss'
@@ -241,13 +240,11 @@ list_features = list(simjob_str.columns)
 kNN_class_correct = pd.DataFrame(columns=list_features)
 for feature in list_features:
     kNN_class_correct[feature] =  np.array(preds[feature] == truth[feature], dtype=int) #check whether the feature was classified correctly
-kNN_rate = kNN_class_correct.mean() #calculate the correct classification rate for each feature
 
 kNN_class_correct_path = "/".join([output_files_path, "kNN_test_class_correct.csv"])
 kNN_class_correct.to_csv(kNN_class_correct_path, index=False) #binary classifications (1 = correct)
 
 kNN_rate_correct = "/".join([output_files_path, "kNN_test_rate.csv"])
-kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate 
 
 print("kNN test results saved!")
 
@@ -263,7 +260,6 @@ kNN_preds_after["Job_ID"] = model.predict(actual_feature_after)
 kNN_preds_after_path = "/".join([output_files_path, "kNN_validation_preds_after.csv"])
 kNN_preds_after.to_csv(kNN_preds_after_path, index=False) #binary classifications (1 = correct)
 print("kNN validation results saved!")
-
 
 # multiple decision trees
 ## split the data - 80/20 train/test split
@@ -314,10 +310,6 @@ for feature in list_features:
     y_test_path = f"{output_files_path}/multiple_trees_test_true_{feature}.csv"
     y_test[[feature]].to_csv(y_test_path, index=False)
 
-    multiple_trees_rate = multi_class_correct.mean() #correct classification rate
-    multiple_trees_rate_path = f"{output_files_path}/multiple_trees_test_rate_{feature}.csv"
-    multiple_trees_rate[[feature]].to_csv(multiple_trees_rate_path, index=False)
-
     multiple_tree_preds_before_path = f"{output_files_path}/multiple_trees_validation_preds_before_{feature}.csv"
     mult_tree_preds_before[[feature]].to_csv(multiple_tree_preds_before_path, index=False)
 
@@ -345,4 +337,3 @@ mult_tree_preds_after["char_prem_id"] = df_actual_after.char_prem_id.unique()
 mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds_after.csv"])
 mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
 print("trees validation results saved!")
-
