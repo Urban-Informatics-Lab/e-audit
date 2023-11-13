@@ -92,16 +92,8 @@ if norm_sf_conversion == 'F':
 for f in meter_files:
     name = os.path.basename(f)
     name = os.path.splitext(name)[0]
-    digits = re.findall('(\d+|\D+)',name)
-    output = [ a for a in digits if a.isnumeric() ]
-    output_str = ''.join(output)
-    output = int(output_str)
     df = pd.read_csv(f)
-    df['Job_ID']=output
-    print("Output Type: ")
-    print(type(output))
-    print("Output: ")
-    print(output)
+    df['Job_ID']=name
     df['Date.Time']=drange
     df = df.rename({'Electricity:Facility': 'Electricity_kWh'}, axis='columns')
 
