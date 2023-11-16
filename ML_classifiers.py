@@ -68,9 +68,15 @@ def feature_grp_actual(new_group1):
   return final_array1
 
 # read in simulated data - columns = Job_ID, Date.Time, kWh_norm_sf
-meter_files_path = input('Enter a directory path for the meter files: ')
-print("meter directory inputed")
-meter_files = glob.glob(os.path.join(meter_files_path, "*.csv"))
+meter_files_path = input('Enter a path for the meter files: ')
+if os.path.isfile(meter_files_path):
+   meter_files = open(meter_files_path)
+   print("meter file inputed")
+   
+if os.path.isdir(meter_files_path):
+  print("meter directory inputed")
+  meter_files = glob.glob(os.path.join(meter_files_path, "*.csv"))
+
 date_str = '12/31/2014'
 start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
 hourly_periods = 8760
@@ -338,4 +344,3 @@ mult_tree_preds_after["char_prem_id"] = df_actual_after.char_prem_id.unique()
 mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds_after.csv"])
 mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
 print("trees validation results saved!")
-
