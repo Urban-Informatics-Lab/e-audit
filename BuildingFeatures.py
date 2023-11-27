@@ -15,11 +15,11 @@ class BuildingFeatures:
         self.alg = alg
     
     # process_alg takes the algorithm input and calls the appropriate method
-    def process_alg(self, meter_file_path, sim_job_file_path, output_files_path, actual_after, sq_ft, J_conversion):
+    def process_alg(self, meter_file_path, sim_job_file_path, output_files_path, actual, sq_ft, J_conversion):
         if self.alg == 'Euclidean':
             df_sim, simjob = self.format_simdata(meter_file_path, sim_job_file_path, sq_ft, J_conversion)
-            df_actual_after_t = self.format_actualdata(actual_after) 
-            self.Euclidean(df_sim, simjob, output_files_path, df_actual_after_t)
+            df_actual_t = self.format_actualdata(actual) 
+            self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
             self.KNN_classifiers()
@@ -30,7 +30,7 @@ class BuildingFeatures:
         else: 
             print("Invalid Algorithm Input. Please provide 'Euclidean', 'KNN', or 'Decision Tree.'")
     
-    def Euclidean(self, df_sim, simjob, output_files_path, df_actual_after_t):
+    def Euclidean(self, df_sim, simjob, output_files_path, df_actual_t):
         #compute Euclidean distance - test set
         print(df_sim)
         np.random.seed(1)
@@ -83,7 +83,7 @@ class BuildingFeatures:
         print("saved test results")
 
         #compute Euclidean distance - validation, after
-        actual2 = df_actual_after_t.iloc[:, :8760]
+        actual2 = df_actual_t.iloc[:, :8760]
         actual2 = actual2.to_numpy()
         df_sim2 = df_sim.iloc[:, :8760]
         df_sim2 = df_sim2.to_numpy()
@@ -93,7 +93,7 @@ class BuildingFeatures:
 
         euc_dist_after.columns = df_sim['Job_ID']
         euc_dist_after['Job_ID'] = euc_dist_after.apply(lambda x: x.idxmin(), axis=1)
-        euc_dist_after['char_prem_id'] = df_actual_after_t['school_id'].tolist()
+        euc_dist_after['char_prem_id'] = df_actual_t['school_id'].tolist()
         euc_dist_after_path = "/".join([output_files_path, "euc_dist_test_after_mat.csv"])
         euc_dist_after.to_csv(euc_dist_after_path, index=False)
         euc_dist_preds_after = euc_dist_after[["Job_ID"]]
@@ -205,27 +205,27 @@ class BuildingFeatures:
         # print(simjob_cols)
         return df_sim, simjob
     
-    def format_actualdata(self, df_actual_after_path):
-        df_actual_after = pd.read_csv(df_actual_after_path)
-        print("loading after data")
+    def format_actualdata(self, df_actual_path):
+        df_actual = pd.read_csv(df_actual_path)
+        print("loading actual data")
         date_str = '12/31/2017'  
         start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
         hourly_periods = 8760
         drange = pd.date_range(start, periods=hourly_periods, freq='H')
-        df_actual_after_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
-        ids = df_actual_after['char_prem_id'].unique()
+        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
+        ids = df_actual['char_prem_id'].unique()
         i=0
         for school_id in ids:
-            df = df_actual_after[df_actual_after['char_prem_id'] == school_id]
+            df = df_actual[df_actual['char_prem_id'] == school_id]
             date_range = df['date_time']
             df = df[['kWh_norm_sf']]
             df = df.transpose()
             df.columns = date_range.astype(str)
             df['school_id'] = school_id
-            df_actual_after_t.iloc[i] = df
+            df_actual_t.iloc[i] = df
             i=i+1
-        print(df_actual_after_t)
-        return df_actual_after_t
+        print(df_actual_t)
+        return df_actual_t
 
 #testing 
 meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset test run/meter files"
