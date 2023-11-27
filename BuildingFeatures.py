@@ -44,15 +44,7 @@ class BuildingFeatures:
         test2 = test2.to_numpy() #make sure all data is numeric
         #calculate euclidean distance between each time series in the training and test sets
         print("calculating test matrix")
-        print("Test2 type: ")
-        print(test2.dtype)
-        print("Train2 type: ")
-        print(train2.dtype)
-
-        print("Missing Values:")
-        print("test2:", np.isnan(test2).any())
-        print("train2:", np.isnan(train2).any())
-
+        
         euc_dist_test = scipy.spatial.distance.cdist(test2,train2,metric = 'euclidean') 
         euc_dist_test = pd.DataFrame(euc_dist_test) #resulting df - each row is job from the test set, each column is a job from the training set
         euc_dist_test = scipy.spatial.distance.cdist(test2,train2,metric = 'euclidean') 
