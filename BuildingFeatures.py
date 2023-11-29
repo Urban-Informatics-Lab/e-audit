@@ -32,19 +32,21 @@ class BuildingFeatures:
     
     def Euclidean(self, df_sim, simjob, output_files_path, df_actual_t):
         #compute Euclidean distance - test set
+        print("DF sim loaded: ")
         print(df_sim)
         np.random.seed(1)
         ridx = np.random.permutation(np.arange(len(df_sim)))
         cidx = int(len(df_sim)*0.8)
         train = df_sim.iloc[ridx[0:cidx]] #subset training set (80%)
         test = df_sim.iloc[ridx[cidx:]] #subset test set (20%)
+        # print(train['Job_ID'])
         train2 = train.iloc[:, :8760] #remove Job_ID column 
         train2 = train2.to_numpy() #make sure all data is numeric
         test2 = test.iloc[:, :8760] #remove Job_ID column
         test2 = test2.to_numpy() #make sure all data is numeric
         #calculate euclidean distance between each time series in the training and test sets
         print("calculating test matrix")
-        
+
         euc_dist_test = scipy.spatial.distance.cdist(test2,train2,metric = 'euclidean') 
         euc_dist_test = pd.DataFrame(euc_dist_test) #resulting df - each row is job from the test set, each column is a job from the training set
         euc_dist_test = scipy.spatial.distance.cdist(test2,train2,metric = 'euclidean') 
@@ -135,23 +137,37 @@ class BuildingFeatures:
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df = pd.read_csv(meter_file_path)
             unique_ids = df['Job_ID'].unique()
-            print("Unique IDs: " + unique_ids)
             df_sim = pd.DataFrame(0., index=np.arange(len(unique_ids)), columns=drange.astype(str).tolist())#+['Job_ID'])
-            i=0 
-            names = [] 
-            df = pd.DataFrame(df)
-            df = df.transpose()
-            for f in unique_ids: 
-                name = f
-                names.append(name)
-                # df.columns = drange.astype(str)
-                df_sim.iloc[i] = df
-                i=i+1
+            # if J is accounted for - have the user input 0 for the J field 
+            if J_conversion == 0: 
+                pass
+            else:
+                # J conversion 
+                df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/(3.6e+6) 
+            # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
+            if sq_ft == 0: 
+                df = df 
+            else: 
+                df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/ sq_ft #secondary SF = 210887, primary = 73959
+            # df = df.set_index(['Electricity:Facility [J](Hourly)', 'Job_ID'])
+            i = 0 
+            # iterate through the unique Job IDs 
+            for job_id in unique_ids: 
+                # gather rows with the same Job ID 
+                df_job = df[df['Job_ID'] == job_id]
+                # extract the electricity data 
+                df_job = df_job['Electricity:Facility [J](Hourly)']
+                # set the columns to be the drange and row data to be the electricity data 
+                df_job = df_job.transpose()
+                df_job.columns = drange.astype(str)
+                # transfer the data from the rows to df_sim 
+                df_sim.iloc[i] = df_job 
+                i += 1 
+            # assign the unique Job_ID column to df_sim 
+            df_sim['Job_ID'] = unique_ids
 
         if os.path.isdir(meter_file_path):
             meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
-            print("meter directory inputed")
-            print("Meter files:" , meter_files)
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
             date_str = '12/31/2014'
             start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
@@ -161,71 +177,63 @@ class BuildingFeatures:
             i=0
             names = []
             for f in meter_files:
+                # handle the name of the file input 
                 name = os.path.basename(f)
                 name = os.path.splitext(name)[0]
                 names.append(name)
                 df = pd.read_csv(f)
-                df = pd.DataFrame(df)
+                if J_conversion == 0: 
+                    pass
+                else:
+                    # J conversion 
+                    df['Electricity:Facility [J](Hourly) ']=df['Electricity:Facility [J](Hourly) ']/(3.6e+6) 
+                # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
+                if sq_ft == 0: 
+                    df = df 
+                else: 
+                    df['Electricity:Facility [J](Hourly) ']=df['Electricity:Facility [J](Hourly) ']/ sq_ft #secondary SF = 210887, primary = 73959
+                # extract only the electricity data we need 
+                df = df['Electricity:Facility [J](Hourly) ']
+                # transform the data to the "wide" format 
                 df = df.transpose()
-                df.columns = df.columns.astype(str)
-                # df.columns = drange.astype(str)
+                df.columns = drange.astype(str)
                 df_sim.iloc[i] = df
                 i=i+1
-
-        # if J is already accounted for - have the user input 0 for the field 
-        if J_conversion == 0: 
-            pass
-        else:
-            # !! need to fix this according to how the user structured their meter files!! 
-            df['Electricity_kWh']=df['Electricity_kWh']/(3.6e+6) 
-
-        # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
-        if sq_ft == 0: 
-            df = df 
-        else: 
-            df = df / sq_ft #secondary SF = 210887, primary = 73959
-
-        df_sim['Job_ID'] = names 
-        print("df_sim in format_simdata:" )
-        print(df_sim)    
+            # assign df_sim to be each of the file names that contains the Job_ID 
+            df_sim['Job_ID'] = names 
+        
         simjob = pd.read_csv(sim_job_file_path)
         simjob = simjob.drop(columns = ['WeatherFile','ModelFile'])
-        # print("building params")
-        # print(simjob.head)
         simjob_cols = list(simjob.columns)
         simjob_cols.remove(simjob_cols[0])
-        # print(simjob_cols)
         return df_sim, simjob
     
     def format_actualdata(self, df_actual_path):
         df_actual = pd.read_csv(df_actual_path)
-        print("loading actual data")
         date_str = '12/31/2017'  
         start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
         hourly_periods = 8760
         drange = pd.date_range(start, periods=hourly_periods, freq='H')
-        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
-        ids = df_actual['char_prem_id'].unique()
+        df_actual_t = pd.DataFrame(0., index=np.arange(309), columns=drange.astype(str).tolist()+['school_id'])
+        ids = df_actual['ID'].unique()
         i=0
         for school_id in ids:
-            df = df_actual[df_actual['char_prem_id'] == school_id]
-            date_range = df['date_time']
-            df = df[['kWh_norm_sf']]
-            df = df.transpose()
+            df = df_actual[df_actual['ID'] == school_id]
+            date_range = df['Date.Time']
+            df = df[['kWh_norm_sf']].transpose()
             df.columns = date_range.astype(str)
             df['school_id'] = school_id
-            df_actual_t.iloc[i] = df
+            df_actual_t.iloc[i] = df.iloc[0]
             i=i+1
-        print(df_actual_t)
         return df_actual_t
-
+    
 #testing 
-meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset test run/meter files"
+meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
 # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
-sim_job_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset test run/SimJobIndex.csv"
+sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
 output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Euc_Results_Class" 
-actual_after = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset test run/actual_after.csv"
-sq_ft = 0
-J_conversion = 0 
+actual = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv" 
+sq_ft = 210887
+J_conversion = 1 
 bf = BuildingFeatures('Euclidean')
-bf.process_alg(meter_files_dir, sim_job_file, output_files_path, actual_after, sq_ft, J_conversion)
+bf.process_alg(meter_files_dir, sim_job, output_files_path, actual, sq_ft, J_conversion)
