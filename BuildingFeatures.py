@@ -15,18 +15,18 @@ class BuildingFeatures:
         self.alg = alg
     
     # process_alg takes the algorithm input and calls the appropriate method
-    def process_alg(self, meter_file_path, sim_job_file_path, output_files_path, actual, sq_ft, J_conversion):
+    def process_alg(self, meter_file_path, sim_job_file_path, date_str, output_files_path, actual, sq_ft, J_conversion):
         if self.alg == 'Euclidean':
-            df_sim, simjob = self.format_simdata(meter_file_path, sim_job_file_path, sq_ft, J_conversion)
+            df_sim, simjob = self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
             df_actual_t = self.format_actualdata(actual) 
             self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
             self.KNN_classifiers()
-            self.format_simdata(meter_file_path, sim_job_file_path, sq_ft)
+            self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft)
         elif self.alg == 'Decision Tree':
             self.DT_classifiers()
-            self.format_simdata(meter_file_path, sim_job_file_path, sq_ft)
+            self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft)
         else: 
             print("Invalid Algorithm Input. Please provide 'Euclidean', 'KNN', or 'Decision Tree.'")
     
@@ -128,11 +128,10 @@ class BuildingFeatures:
     def DT_classifiers(self): 
         print("Calculating the Decision Tree(s)")
 
-    def format_simdata(self, meter_file_path, sim_job_file_path, sq_ft, J_conversion):
+    def format_simdata(self, meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
-            date_str = '12/31/2014'
-            start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
+            start = pd.to_datetime(date_str)
             hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df = pd.read_csv(meter_file_path)
@@ -169,8 +168,7 @@ class BuildingFeatures:
         if os.path.isdir(meter_file_path):
             meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
-            date_str = '12/31/2014'
-            start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
+            start = pd.to_datetime(date_str)
             hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df_sim = pd.DataFrame(0., index=np.arange(len(meter_files)), columns=drange.astype(str).tolist())#+['Job_ID'])
@@ -210,10 +208,10 @@ class BuildingFeatures:
     
     def format_actualdata(self, df_actual_path):
         df_actual = pd.read_csv(df_actual_path)
-        date_str = '12/31/2017'  
-        start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
+        start = pd.to_datetime(date_str) 
         hourly_periods = 8760
         drange = pd.date_range(start, periods=hourly_periods, freq='H')
+        # change the index to be the length of the dataframe 
         df_actual_t = pd.DataFrame(0., index=np.arange(309), columns=drange.astype(str).tolist()+['school_id'])
         ids = df_actual['ID'].unique()
         i=0
@@ -232,8 +230,10 @@ meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Met
 # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
 sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
 output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Euc_Results_Class" 
-actual = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv" 
+actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
+
+date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 1 
 bf = BuildingFeatures('Euclidean')
-bf.process_alg(meter_files_dir, sim_job, output_files_path, actual, sq_ft, J_conversion)
+bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
