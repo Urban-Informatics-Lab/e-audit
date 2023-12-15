@@ -23,6 +23,11 @@ from scipy import spatial
 import os 
 from pathlib import Path  
 
+def extract_datetime(date_str):
+  # date_str = correct_date_str(date_str)
+  date = datetime.strptime(date_str, ' %m/%d  %H:%M:%S')
+  return date #.replace(year=2014)
+
 def time_stats(group):
   new_grp = group
   new_grp['date'] = new_grp['Date/Time'] #.apply(extract_datetime)
@@ -30,6 +35,25 @@ def time_stats(group):
   new_grp['week'] = new_grp['date'].apply(lambda d: d.isocalendar()[1])
   new_grp['day'] = new_grp['date'].apply(lambda d: d.timetuple().tm_yday)
   return new_grp
+
+def time_stats_2(group):
+  new_grp = group
+  new_grp['Date/Time'] = new_grp['Date/Time'].str.replace(' 24:00:00', ' 00:00:00')
+  new_grp['date'] = new_grp['Date/Time'].apply(extract_datetime)
+  new_grp['month'] = new_grp['date'].apply(lambda d: d.month)
+  new_grp['week'] = new_grp['date'].apply(lambda d: d.isocalendar()[1])
+  new_grp['day'] = new_grp['date'].apply(lambda d: d.timetuple().tm_yday)
+  return new_grp
+
+def feature_grp_meter_file(new_group):
+  grp_month = new_group[['Electricity:Facility [J](Hourly)','month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
+  numpy_month = grp_month['Electricity:Facility [J](Hourly)'].to_numpy().flatten()
+  grp_year = new_group['Electricity:Facility [J](Hourly)'].agg(func = ['mean', 'min','max','median','std'])
+  numpy_year = grp_year.to_numpy().flatten()
+  grp_week = new_group[['Electricity:Facility [J](Hourly)','week']].groupby('week').agg(func = ['mean', 'min', 'max', 'median', 'std'])
+  numpy_week = grp_week['Electricity:Facility [J](Hourly)'].to_numpy().flatten()
+  final_array = np.concatenate((numpy_month, numpy_year, numpy_week))
+  return final_array
 
 def feature_grp_meter_dir(new_group):
   grp_month = new_group[['Electricity:Facility [J](Hourly) ','month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
@@ -83,8 +107,8 @@ class BuildingFeatures:
 
         elif self.alg == 'Decision Tree':
             df_sim, buildingparams, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_after, actual_feature_after = self.format_ML_actualdata(actual)
-            self.DecisionTrees(buildingparams, output_files_path, df_actual_after, actual_feature_after, feature_vector, job_id)
+            df_actual_t, actual_feature_after = self.format_ML_actualdata(actual)
+            self.DecisionTrees(buildingparams, output_files_path, df_actual_t, actual_feature_after, feature_vector, job_id)
 
         else: 
             print("Invalid Algorithm Input. Please provide 'Euclidean', 'KNN', or 'Decision Tree.'")
@@ -296,6 +320,38 @@ class BuildingFeatures:
     def format_MLdata(self, meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
+            start = pd.to_datetime(date_str)
+            hourly_periods = 8760
+            drange = pd.date_range(start, periods=hourly_periods, freq='H')
+            df = pd.read_csv(meter_file_path)
+            unique_ids = df['Job_ID'].unique()
+            df_sim = []
+            # if J is accounted for - have the user input 0 for the J field 
+            if J_conversion == 0: 
+                pass
+            else:
+                # J conversion 
+                df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/(3.6e+6) 
+            # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
+            if sq_ft == 0: 
+                df = df 
+            else: 
+                df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/ sq_ft #secondary SF = 210887, primary = 73959
+
+            df_sim = df
+            print("DF Sim: ")
+            print(df_sim)
+            #create time series features for each Job ID 
+            grouped_id = df_sim.groupby('Job_ID')
+            feature_list = []
+            job_id = []
+            for name, group in list(grouped_id):
+                final_group = time_stats_2(group)
+                feature_list.append(feature_grp_meter_file(final_group))
+                job_id.append(name)
+                feature_vector = np.array(feature_list)
+            print("simulation data:")
+            print(df_sim.head) 
         if os.path.isdir(meter_file_path):
             meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
@@ -314,7 +370,6 @@ class BuildingFeatures:
                 df['Job_ID'] = name
                 df['Date/Time']=drange
                 # names.append(name)
-                
                 if J_conversion == 0: 
                     pass
                 else:
@@ -390,7 +445,7 @@ class BuildingFeatures:
         test_truth = "/".join([output_files_path, "kNN_test_true.csv"])
         truth.to_csv(test_truth, index=False) 
 
-    def DecisionTrees(self, buildingparams, output_files_path, df_actual_after, actual_feature_after, feature_vector, job_id): 
+    def DecisionTrees(self, buildingparams, output_files_path, df_actual_t, actual_feature_after, feature_vector, job_id): 
         # multiple decision trees
         # split the data - 80/20 train/test split
         X_train, X_test, y_train, y_test = train_test_split(feature_vector, buildingparams,random_state=203,test_size=0.2,shuffle=True)
@@ -407,7 +462,7 @@ class BuildingFeatures:
         #create empty dataframes before for loop
         # multi_class_correct = pd.DataFrame(columns=list_features)
         multi_class_test_preds = pd.DataFrame(columns=list_features)
-        mult_tree_preds_after["ID"] = df_actual_after.ID.unique()
+        mult_tree_preds_after["ID"] = df_actual_t.ID.unique()
         #create column with actual building IDs
         #set hyperparameters for tuning each decision tree
         max_depth_range = [4,5,6,7,8,9,10,11,12,15,20,30,40,50,70,90,120,150]
@@ -447,7 +502,7 @@ class BuildingFeatures:
             y_test.to_csv(y_test_preds_path, index=False)
             print("trees test results saved!")
 
-            mult_tree_preds_after["ID"] = df_actual_after.ID.unique()
+            mult_tree_preds_after["ID"] = df_actual_t.ID.unique()
             mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds.csv"])
             mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
             print("trees validation results saved!")
@@ -466,8 +521,8 @@ class BuildingFeatures:
 # bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
 
 #KNN testing
-meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
-# meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
+# meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
+meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
 sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
 output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Euc_Results_Class" 
 actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
@@ -476,4 +531,4 @@ date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 1 
 bf = BuildingFeatures('Decision Tree')
-bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
+bf.process_alg(meter_file, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
