@@ -1,6 +1,20 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import sklearn
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn import preprocessing
+from sklearn.tree import DecisionTreeClassifier 
+from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import GridSearchCV
+from sklearn import metrics 
+import glob 
+import os
+import re 
+from pathlib import Path  
+import pandas as pd
+import numpy as np
+from datetime import datetime
 import glob 
 import os
 import random
@@ -8,6 +22,29 @@ import scipy
 from scipy import spatial 
 import os 
 from pathlib import Path  
+
+def time_stats_actual(group1):
+    new_grp1 = group1
+    new_grp1['date'] = new_grp1['Date.Time'].apply(extract_datetime_actual)
+    new_grp1['month'] = new_grp1['date'].apply(lambda d: d.month)
+    new_grp1['week'] = new_grp1['date'].apply(lambda d: d.isocalendar()[1])
+    new_grp1['day'] = new_grp1['date'].apply(lambda d: d.timetuple().tm_yday)
+    return new_grp1
+
+def extract_datetime_actual(date_str1):
+    date_str1 = date_str1.replace(' 24:00:00', ' 00:00:00')
+    date1 = datetime.strptime(date_str1, ' %m/%d  %H:%M:%S')
+    return date1
+
+def feature_grp_actual(new_group1):
+  grp_month1 = new_group1[['kWh_norm_sf','month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
+  numpy_month1 = grp_month1['kWh_norm_sf'].to_numpy().flatten()
+  grp_year1 = new_group1['kWh_norm_sf'].agg(func = ['mean', 'min','max','median','std'])
+  numpy_year1 = grp_year1.to_numpy().flatten()
+  grp_week1 = new_group1[['kWh_norm_sf','week']].groupby('week').agg(func = ['mean', 'min', 'max', 'median', 'std'])
+  numpy_week1 = grp_week1['kWh_norm_sf'].to_numpy().flatten()
+  final_array1 = np.concatenate((numpy_month1, numpy_year1, numpy_week1))
+  return final_array1
 
 class BuildingFeatures: 
     def __init__(self, alg):
@@ -18,15 +55,16 @@ class BuildingFeatures:
     def process_alg(self, meter_file_path, sim_job_file_path, date_str, output_files_path, actual, sq_ft, J_conversion):
         if self.alg == 'Euclidean':
             df_sim, simjob = self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_t = self.format_actualdata(actual) 
+            df_actual_t = self.format_sim_actualdata(actual) 
             self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
             self.KNN_classifiers()
-            self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft)
+            self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_actual_t = self.format_ML_actualdata(actual)
         elif self.alg == 'Decision Tree':
             self.DT_classifiers()
-            self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft)
+            
         else: 
             print("Invalid Algorithm Input. Please provide 'Euclidean', 'KNN', or 'Decision Tree.'")
     
@@ -206,7 +244,7 @@ class BuildingFeatures:
         simjob_cols.remove(simjob_cols[0])
         return df_sim, simjob
     
-    def format_actualdata(self, df_actual_path):
+    def format_sim_actualdata(self, df_actual_path):
         df_actual = pd.read_csv(df_actual_path)
         start = pd.to_datetime(date_str) 
         hourly_periods = 8760
@@ -223,9 +261,36 @@ class BuildingFeatures:
             df['school_id'] = school_id
             df_actual_t.iloc[i] = df.iloc[0]
             i=i+1
+        print("Actual data: ")
+        print(df_actual_t) 
         return df_actual_t
+  
+    def format_ML_actualdata(self, df_actual_path):
+        df_actual_after = pd.read_csv(df_actual_path)
+        print(df_actual_after)
+        actual_feat = []
+        grouped_actual_after = df_actual_after.groupby('ID')
+        for name, group in list(grouped_actual_after): #create time series features
+            fin_actual = time_stats_actual(group)
+            actual_feat.append(feature_grp_actual(fin_actual))
+        actual_feature_after = np.array(actual_feat)
+        print("actual data loaded")
+        print(df_actual_after.head)
     
-#testing 
+# #EUC testing 
+# meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
+# # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
+# sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
+# output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Euc_Results_Class" 
+# actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
+
+# date_str = "01/01/2014"
+# sq_ft = 210887
+# J_conversion = 1 
+# bf = BuildingFeatures('Euclidean')
+# bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
+
+#KNN testing
 meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
 # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
 sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
@@ -235,5 +300,5 @@ actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample 
 date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 1 
-bf = BuildingFeatures('Euclidean')
+bf = BuildingFeatures('KNN')
 bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
