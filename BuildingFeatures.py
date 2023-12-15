@@ -77,14 +77,15 @@ class BuildingFeatures:
             self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
-            self.KNN_classifiers()
-            df_sim, simjob, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_t = self.format_ML_actualdata(actual)
+            df_sim, buildingparams, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_actual_t, actual_feature_after = self.format_ML_actualdata(actual)
             self.KNN(df_sim, output_files_path, feature_vector, job_id)
 
         elif self.alg == 'Decision Tree':
-            self.DT_classifiers()
-            
+            df_sim, buildingparams, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_actual_after, actual_feature_after = self.format_ML_actualdata(actual)
+            self.DecisionTrees(buildingparams, output_files_path, df_actual_after, actual_feature_after, feature_vector, job_id)
+
         else: 
             print("Invalid Algorithm Input. Please provide 'Euclidean', 'KNN', or 'Decision Tree.'")
     
@@ -179,12 +180,6 @@ class BuildingFeatures:
         correct_rate = class_correct.mean()
         correct_rate_path = "/".join([output_files_path, "test_rate.csv"])
         correct_rate.to_csv(correct_rate_path, index=False)
-    
-    def KNN_classifiers(self): 
-        print("Calculating KNN")
-
-    def DT_classifiers(self): 
-        print("Calculating the Decision Tree(s)")
 
     def format_simdata(self, meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
@@ -296,6 +291,7 @@ class BuildingFeatures:
         actual_feature_after = np.array(actual_feat)
         print("actual data loaded")
         print(df_actual_after.head)
+        return df_actual_after, actual_feature_after
 
     def format_MLdata(self, meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
@@ -364,14 +360,7 @@ class BuildingFeatures:
 
         return df_sim, building_params, feature_vector, job_id
     
-    def KNN(self, simjob, output_files_path, feature_vector, job_id):
-        simjob_str = simjob.astype(str)
-        #create new index for merging purposes 
-        simjob_str.index = np.arange(1, len(simjob_str)+1)
-        building_params = simjob_str.reset_index()
-        print("Sim Job_Str:")
-        print(simjob_str)
-        building_params = simjob_str
+    def KNN(self, building_params, output_files_path, feature_vector, job_id):
         # create a new index for merging purposes 
         building_params.index = np.arange(1, len(building_params)+1)
         building_params = building_params.reset_index()
@@ -401,6 +390,68 @@ class BuildingFeatures:
         test_truth = "/".join([output_files_path, "kNN_test_true.csv"])
         truth.to_csv(test_truth, index=False) 
 
+    def DecisionTrees(self, buildingparams, output_files_path, df_actual_after, actual_feature_after, feature_vector, job_id): 
+        # multiple decision trees
+        # split the data - 80/20 train/test split
+        X_train, X_test, y_train, y_test = train_test_split(feature_vector, buildingparams,random_state=203,test_size=0.2,shuffle=True)
+        print("Building params:")
+        print(buildingparams)
+        y_test = y_test.reset_index(inplace=False)
+        list_features = list(buildingparams.columns)
+        list_features.remove('Job_ID') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
+        list_features.remove('index') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
+        list_features.remove('#') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
+        print("List Features:")
+        print(list_features) #check that it's only the features we want
+        mult_tree_preds_after = pd.DataFrame(columns=list_features)
+        #create empty dataframes before for loop
+        # multi_class_correct = pd.DataFrame(columns=list_features)
+        multi_class_test_preds = pd.DataFrame(columns=list_features)
+        mult_tree_preds_after["ID"] = df_actual_after.ID.unique()
+        #create column with actual building IDs
+        #set hyperparameters for tuning each decision tree
+        max_depth_range = [4,5,6,7,8,9,10,11,12,15,20,30,40,50,70,90,120,150]
+        sample_split_range = list(range(2, 50))
+        leaf_range = list(range(1,40))
+        tree_param = [{'criterion': ['gini'], 'max_depth': max_depth_range, 'splitter': ['random','best']},
+                    {'min_samples_split': sample_split_range, 'min_samples_leaf': leaf_range}]
+        
+        #this for loop saves the results after each feature in case running the code times out and the script fails
+        for feature in list_features:
+            print(feature)
+            clf = GridSearchCV(DecisionTreeClassifier(), tree_param, cv=2, scoring='accuracy') #hyperparameter tuning 
+            clf_feature = clf.fit(X_train, y_train["{}".format(feature)]) #create a decision tree for each building feature
+            print(clf_feature.best_estimator_)
+            y_predicted = clf_feature.predict(X_test)
+            print("y predicted")
+            print(feature)
+            print(y_predicted)
+            multi_class_test_preds[feature] = y_predicted #predictions on test set
+            mult_tree_preds_after[feature] = clf_feature.predict(actual_feature_after) #predictions on post-retrofit data
+            
+            multi_class_test_preds_path = f"{output_files_path}/multiple_trees_test_preds_{feature}.csv"
+            multi_class_test_preds[[feature]].to_csv(multi_class_test_preds_path, index=False)
+            
+            y_test_path = f"{output_files_path}/multiple_trees_test_true_{feature}.csv"
+            y_test[[feature]].to_csv(y_test_path, index=False)
+
+            multiple_tree_preds_after_path = f"{output_files_path}/multiple_trees_validation_preds_after_{feature}.csv"
+            mult_tree_preds_after[[feature]].to_csv(multiple_tree_preds_after_path, index=False)
+
+            #save all of the results (for each feature tree) in one file
+            print("saving results...(trees)")
+
+            multi_class_test_preds_path = "/".join([output_files_path, "multiple_trees_test_preds.csv"])
+            multi_class_test_preds.to_csv(multi_class_test_preds_path, index=False)
+            y_test_preds_path = "/".join([output_files_path, "multiple_trees_test_true.csv"])
+            y_test.to_csv(y_test_preds_path, index=False)
+            print("trees test results saved!")
+
+            mult_tree_preds_after["ID"] = df_actual_after.ID.unique()
+            mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds.csv"])
+            mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
+            print("trees validation results saved!")
+
 # #EUC testing 
 # meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
 # # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
@@ -424,5 +475,5 @@ actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample 
 date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 1 
-bf = BuildingFeatures('KNN')
+bf = BuildingFeatures('Decision Tree')
 bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
