@@ -23,6 +23,24 @@ from scipy import spatial
 import os 
 from pathlib import Path  
 
+def time_stats(group):
+  new_grp = group
+  new_grp['date'] = new_grp['Date/Time'] #.apply(extract_datetime)
+  new_grp['month'] = new_grp['date'].apply(lambda d: d.month)
+  new_grp['week'] = new_grp['date'].apply(lambda d: d.isocalendar()[1])
+  new_grp['day'] = new_grp['date'].apply(lambda d: d.timetuple().tm_yday)
+  return new_grp
+
+def feature_grp_meter_dir(new_group):
+  grp_month = new_group[['Electricity:Facility [J](Hourly) ','month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
+  numpy_month = grp_month['Electricity:Facility [J](Hourly) '].to_numpy().flatten()
+  grp_year = new_group['Electricity:Facility [J](Hourly) '].agg(func = ['mean', 'min','max','median','std'])
+  numpy_year = grp_year.to_numpy().flatten()
+  grp_week = new_group[['Electricity:Facility [J](Hourly) ','week']].groupby('week').agg(func = ['mean', 'min', 'max', 'median', 'std'])
+  numpy_week = grp_week['Electricity:Facility [J](Hourly) '].to_numpy().flatten()
+  final_array = np.concatenate((numpy_month, numpy_year, numpy_week))
+  return final_array
+
 def time_stats_actual(group1):
     new_grp1 = group1
     new_grp1['date'] = new_grp1['Date.Time'].apply(extract_datetime_actual)
@@ -60,8 +78,10 @@ class BuildingFeatures:
 
         elif self.alg == 'KNN':
             self.KNN_classifiers()
-            self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_sim, simjob, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
             df_actual_t = self.format_ML_actualdata(actual)
+            self.KNN(df_sim, output_files_path, feature_vector, job_id)
+
         elif self.alg == 'Decision Tree':
             self.DT_classifiers()
             
@@ -276,7 +296,111 @@ class BuildingFeatures:
         actual_feature_after = np.array(actual_feat)
         print("actual data loaded")
         print(df_actual_after.head)
+
+    def format_MLdata(self, meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion):
+        if os.path.isfile(meter_file_path):
+            print("meter file inputed")
+        if os.path.isdir(meter_file_path):
+            meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
+            #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
+            start = pd.to_datetime(date_str)
+            hourly_periods = 8760
+            drange = pd.date_range(start, periods=hourly_periods, freq='H')
+            df_sim = []
+            i=0
+            names = []
+            for f in meter_files:
+                # handle the name of the file input 
+                name = os.path.basename(f)
+                name = os.path.splitext(name)[0] 
+                names.append(name)
+                df = pd.read_csv(f)
+                df['Job_ID'] = name
+                df['Date/Time']=drange
+                # names.append(name)
+                
+                if J_conversion == 0: 
+                    pass
+                else:
+                    # J conversion 
+                    df['Electricity:Facility [J](Hourly) ']=df['Electricity:Facility [J](Hourly) ']/(3.6e+6) 
+                # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
+                if sq_ft == 0: 
+                    df = df 
+                else: 
+                    df['Electricity:Facility [J](Hourly) ']=df['Electricity:Facility [J](Hourly) ']/ sq_ft #secondary SF = 210887, primary = 73959
+                df_sim.append(df)
+            print("DF SIM: ")
+            print(type(df_sim))
+            # # assign df_sim to be each of the file names that contains the Job_ID 
+            df_sim=pd.concat(df_sim)
+            print("DF Sim: ")
+            print(df_sim)
+            #create time series features for each Job ID 
+            grouped_id = df_sim.groupby('Job_ID')
+            feature_list = []
+            job_id = []
+            for name, group in list(grouped_id):
+                final_group = time_stats(group)
+                feature_list.append(feature_grp_meter_dir(final_group))
+                job_id.append(name)
+                feature_vector = np.array(feature_list)
+            print("simulation data:")
+            print(df_sim.head)
+        
+        simjob = pd.read_csv(sim_job_file_path)
+        simjob = simjob.drop(columns = ['WeatherFile','ModelFile'])
+        simjob_str = simjob.astype(str) 
+        # simjob_cols = list(simjob.columns)
+        # simjob_cols.remove(simjob_cols[0])
+        simjob_str.index = np.arange(1, len(simjob_str)+1)
+        building_params = simjob_str.reset_index()
+        print("Sim Job_Str:")
+        print(simjob_str)
+        building_params = simjob_str
+        # create a new index for merging purposes 
+        building_params.index = np.arange(1, len(building_params)+1)
+        building_params = building_params.reset_index()
+
+        return df_sim, building_params, feature_vector, job_id
     
+    def KNN(self, simjob, output_files_path, feature_vector, job_id):
+        simjob_str = simjob.astype(str)
+        #create new index for merging purposes 
+        simjob_str.index = np.arange(1, len(simjob_str)+1)
+        building_params = simjob_str.reset_index()
+        print("Sim Job_Str:")
+        print(simjob_str)
+        building_params = simjob_str
+        # create a new index for merging purposes 
+        building_params.index = np.arange(1, len(building_params)+1)
+        building_params = building_params.reset_index()
+        # kNN classifying
+        le = preprocessing.LabelEncoder()
+        label=le.fit_transform(job_id)
+        # split the data - 80/20 training/testing
+        X_train, X_test, y_train, y_test = train_test_split(feature_vector, label,random_state=135,test_size=0.2,shuffle=True)
+        # train the model
+        model = KNeighborsClassifier(n_neighbors=1)
+        model.fit(X_train,y_train)
+        # test on the subset 
+        y_predicted = model.predict(X_test)
+        preds = pd.DataFrame(y_predicted.T, columns = ['Job_ID'])
+        truth = pd.DataFrame(y_test.T, columns = ['Job_ID'])
+        preds['Job_ID']=preds['Job_ID'].astype(str)
+        building_params['index']=building_params['index'].astype(str)
+        truth['Job_ID']=truth['Job_ID'].astype(str)
+        #altered the merging code to be on the index 
+        preds = pd.merge(preds, building_params, left_on="Job_ID", right_on="index") #merge with actual building parameters to check how close the match was
+        truth = pd.merge(truth, building_params, left_on="Job_ID", right_on="index")
+        output_test_path = "/".join([output_files_path, "kNN_test_preds.csv"])
+        filepath = Path(output_test_path)  
+        filepath.parent.mkdir(parents=True, exist_ok=True)  
+        preds.to_csv(filepath, index=False)
+        print("kNN_test_preds saved")
+        test_truth = "/".join([output_files_path, "kNN_test_true.csv"])
+        truth.to_csv(test_truth, index=False) 
+
 # #EUC testing 
 # meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
 # # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
