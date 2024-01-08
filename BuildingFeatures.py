@@ -209,7 +209,10 @@ class BuildingFeatures:
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
             start = pd.to_datetime(date_str)
-            hourly_periods = 8760
+            if start.is_leap_year:
+                hourly_periods = 8784 
+            else: 
+                hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df = pd.read_csv(meter_file_path)
             unique_ids = df['Job_ID'].unique()
@@ -246,7 +249,10 @@ class BuildingFeatures:
             meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
             start = pd.to_datetime(date_str)
-            hourly_periods = 8760
+            if start.is_leap_year:
+                hourly_periods = 8784 
+            else: 
+                hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df_sim = pd.DataFrame(0., index=np.arange(len(meter_files)), columns=drange.astype(str).tolist())#+['Job_ID'])
             i=0
@@ -261,14 +267,14 @@ class BuildingFeatures:
                     pass
                 else:
                     # J conversion 
-                    df['Electricity:Facility [J](Hourly) ']=df['Electricity:Facility [J](Hourly) ']/(3.6e+6) 
+                    df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/(3.6e+6) 
                 # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
                 if sq_ft == 0: 
                     df = df 
                 else: 
-                    df['Electricity:Facility [J](Hourly) ']=df['Electricity:Facility [J](Hourly) ']/ sq_ft #secondary SF = 210887, primary = 73959
+                    df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/ sq_ft #secondary SF = 210887, primary = 73959
                 # extract only the electricity data we need 
-                df = df['Electricity:Facility [J](Hourly) ']
+                df = df['Electricity:Facility [J](Hourly)']
                 # transform the data to the "wide" format 
                 df = df.transpose()
                 df.columns = drange.astype(str)
@@ -521,8 +527,8 @@ class BuildingFeatures:
 # bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
 
 #KNN + Decision Tree Testing
-# meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
-meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
+meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
+# meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
 sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
 output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Euc_Results_Class" 
 actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
@@ -531,4 +537,4 @@ date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 1 
 bf = BuildingFeatures('Decision Tree')
-bf.process_alg(meter_file, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
+bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
