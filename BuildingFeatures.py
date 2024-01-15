@@ -102,13 +102,13 @@ class BuildingFeatures:
 
         elif self.alg == 'KNN':
             df_sim, buildingparams, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_t, actual_feature_after = self.format_ML_actualdata(actual)
+            df_actual_t = self.format_ML_actualdata(actual)
             self.KNN(df_sim, output_files_path, feature_vector, job_id)
 
         elif self.alg == 'Decision Tree':
             df_sim, buildingparams, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_t, actual_feature_after = self.format_ML_actualdata(actual)
-            self.DecisionTrees(buildingparams, output_files_path, df_actual_t, actual_feature_after, feature_vector, job_id)
+            df_actual_t = self.format_ML_actualdata(actual)
+            self.DecisionTrees(buildingparams, output_files_path, feature_vector, job_id)
 
         else: 
             print("Invalid Algorithm Input. Please provide 'Euclidean', 'KNN', or 'Decision Tree.'")
@@ -431,6 +431,8 @@ class BuildingFeatures:
         return df_sim, building_params, feature_vector, job_id
     
     def KNN(self, building_params, output_files_path, feature_vector, job_id):
+        # create a new output files path if needed 
+        Path(output_files_path).mkdir(parents=True, exist_ok=True)
         # create a new index for merging purposes 
         building_params.index = np.arange(1, len(building_params)+1)
         building_params = building_params.reset_index()
@@ -460,7 +462,10 @@ class BuildingFeatures:
         test_truth = "/".join([output_files_path, "kNN_test_true.csv"])
         truth.to_csv(test_truth, index=False) 
 
-    def DecisionTrees(self, buildingparams, output_files_path, df_actual_t, actual_feature_after, feature_vector, job_id): 
+    def DecisionTrees(self, buildingparams, output_files_path, feature_vector, job_id): 
+        # create output file path if needed 
+        Path(output_files_path).mkdir(parents=True, exist_ok=True)
+
         # multiple decision trees
         # split the data - 80/20 train/test split
         X_train, X_test, y_train, y_test = train_test_split(feature_vector, buildingparams,random_state=203,test_size=0.2,shuffle=True)
@@ -498,12 +503,17 @@ class BuildingFeatures:
             print(y_predicted)
             multi_class_correct[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
             multi_class_test_preds[feature] = y_predicted #predictions on test set
-            
-            
-            multi_class_test_preds_path = f"{output_files_path}/multiple_trees_test_preds_{feature}.csv"
+
+            # create separate folder to contain all the features 
+            test_preds_path = f"{output_files_path}/multiple_trees_test_preds_features"
+            Path(test_preds_path).mkdir(parents=True, exist_ok=True)
+            multi_class_test_preds_path = f"{test_preds_path}/test_preds_{feature}.csv"
             multi_class_test_preds[[feature]].to_csv(multi_class_test_preds_path, index=False)
-            
-            y_test_path = f"{output_files_path}/multiple_trees_test_true_{feature}.csv"
+
+            # create separate folder to contain all the features 
+            test_true_path = f"{output_files_path}/multiple_trees_test_true_features"
+            Path(test_true_path).mkdir(parents=True, exist_ok=True)
+            y_test_path = f"{test_true_path}/test_true_{feature}.csv"
             y_test[[feature]].to_csv(y_test_path, index=False)
 
             #multiple_tree_preds_after_path = f"{output_files_path}/multiple_trees_validation_preds_after_{feature}.csv"
