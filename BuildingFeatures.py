@@ -483,6 +483,7 @@ class BuildingFeatures:
         multi_class_correct = pd.DataFrame(columns=list_features)
         multi_class_test_preds = pd.DataFrame(columns=list_features)
         multi_class_test_preds["ID"] = y_test.Job_ID.unique()
+        multi_class_correct["ID"] = y_test.Job_ID.unique()
         #create column with actual building IDs
         #set hyperparameters for tuning each decision tree
         max_depth_range = [4,5,6,7,8,9,10,11,12,15,20,30,40,50,70,90,120,150]
@@ -501,8 +502,14 @@ class BuildingFeatures:
             print("y predicted")
             print(feature)
             print(y_predicted)
+
             multi_class_correct[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
             multi_class_test_preds[feature] = y_predicted #predictions on test set
+
+            correct_path = f"{output_files_path}/multiple_trees_class_correct_features"
+            Path(correct_path).mkdir(parents=True, exist_ok=True)
+            multi_class_correct_path = f"{correct_path}/class_correct_{feature}.csv"
+            multi_class_correct[[feature]].to_csv(multi_class_correct_path, index=False)
 
             # create separate folder to contain all the features 
             test_preds_path = f"{output_files_path}/multiple_trees_test_preds_features"
@@ -516,22 +523,15 @@ class BuildingFeatures:
             y_test_path = f"{test_true_path}/test_true_{feature}.csv"
             y_test[[feature]].to_csv(y_test_path, index=False)
 
-            #multiple_tree_preds_after_path = f"{output_files_path}/multiple_trees_validation_preds_after_{feature}.csv"
-            #mult_tree_preds_after[[feature]].to_csv(multiple_tree_preds_after_path, index=False)
-
-            #save all of the results (for each feature tree) in one file
             print("saving results...(trees)")
 
             multi_class_test_preds_path = "/".join([output_files_path, "multiple_trees_test_preds.csv"])
             multi_class_test_preds.to_csv(multi_class_test_preds_path, index=False)
             y_test_preds_path = "/".join([output_files_path, "multiple_trees_test_true.csv"])
             y_test.to_csv(y_test_preds_path, index=False)
+            multi_class_correct_path = "/".join([output_files_path, "multiple_trees_class_correct.csv"])
+            multi_class_correct.to_csv(multi_class_correct_path, index=False) 
             print("trees test results saved!")
-
-            # mult_tree_preds_after["ID"] = df_actual_t.ID.unique()
-            # mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds.csv"])
-            # mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
-            # print("trees validation results saved!")
 
 # #EUC testing 
 # meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
