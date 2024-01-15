@@ -292,7 +292,10 @@ class BuildingFeatures:
     def format_sim_actualdata(self, df_actual_path):
         df_actual = pd.read_csv(df_actual_path)
         start = pd.to_datetime(date_str) 
-        hourly_periods = 8760
+        if start.is_leap_year:
+                hourly_periods = 8784 
+        else: 
+            hourly_periods = 8760
         drange = pd.date_range(start, periods=hourly_periods, freq='H')
         # change the index to be the length of the dataframe 
         df_actual_t = pd.DataFrame(0., index=np.arange(309), columns=drange.astype(str).tolist()+['school_id'])
@@ -327,7 +330,10 @@ class BuildingFeatures:
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
             start = pd.to_datetime(date_str)
-            hourly_periods = 8760
+            if start.is_leap_year:
+                hourly_periods = 8784 
+            else: 
+                hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df = pd.read_csv(meter_file_path)
             unique_ids = df['Job_ID'].unique()
@@ -362,7 +368,10 @@ class BuildingFeatures:
             meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
             start = pd.to_datetime(date_str)
-            hourly_periods = 8760
+            if start.is_leap_year:
+                hourly_periods = 8784 
+            else: 
+                hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df_sim = []
             i=0
@@ -464,11 +473,11 @@ class BuildingFeatures:
         list_features.remove('#') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
         print("List Features:")
         print(list_features) #check that it's only the features we want
-        mult_tree_preds_after = pd.DataFrame(columns=list_features)
+        
         #create empty dataframes before for loop
-        # multi_class_correct = pd.DataFrame(columns=list_features)
+        multi_class_correct = pd.DataFrame(columns=list_features)
         multi_class_test_preds = pd.DataFrame(columns=list_features)
-        mult_tree_preds_after["ID"] = df_actual_t.ID.unique()
+        multi_class_test_preds["ID"] = y_test.Job_ID.unique()
         #create column with actual building IDs
         #set hyperparameters for tuning each decision tree
         max_depth_range = [4,5,6,7,8,9,10,11,12,15,20,30,40,50,70,90,120,150]
@@ -487,8 +496,9 @@ class BuildingFeatures:
             print("y predicted")
             print(feature)
             print(y_predicted)
+            multi_class_correct[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
             multi_class_test_preds[feature] = y_predicted #predictions on test set
-            mult_tree_preds_after[feature] = clf_feature.predict(actual_feature_after) #predictions on post-retrofit data
+            
             
             multi_class_test_preds_path = f"{output_files_path}/multiple_trees_test_preds_{feature}.csv"
             multi_class_test_preds[[feature]].to_csv(multi_class_test_preds_path, index=False)
@@ -496,8 +506,8 @@ class BuildingFeatures:
             y_test_path = f"{output_files_path}/multiple_trees_test_true_{feature}.csv"
             y_test[[feature]].to_csv(y_test_path, index=False)
 
-            multiple_tree_preds_after_path = f"{output_files_path}/multiple_trees_validation_preds_after_{feature}.csv"
-            mult_tree_preds_after[[feature]].to_csv(multiple_tree_preds_after_path, index=False)
+            #multiple_tree_preds_after_path = f"{output_files_path}/multiple_trees_validation_preds_after_{feature}.csv"
+            #mult_tree_preds_after[[feature]].to_csv(multiple_tree_preds_after_path, index=False)
 
             #save all of the results (for each feature tree) in one file
             print("saving results...(trees)")
@@ -508,10 +518,10 @@ class BuildingFeatures:
             y_test.to_csv(y_test_preds_path, index=False)
             print("trees test results saved!")
 
-            mult_tree_preds_after["ID"] = df_actual_t.ID.unique()
-            mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds.csv"])
-            mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
-            print("trees validation results saved!")
+            # mult_tree_preds_after["ID"] = df_actual_t.ID.unique()
+            # mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds.csv"])
+            # mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
+            # print("trees validation results saved!")
 
 # #EUC testing 
 # meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
@@ -530,11 +540,12 @@ class BuildingFeatures:
 meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
 # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
 sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
-output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Euc_Results_Class" 
+output_files_path = "/Users/dipashreyasur/Desktop/DT_Meter_Dir" 
 actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
 
 date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 1 
 bf = BuildingFeatures('Decision Tree')
+# bf = BuildingFeatures('KNN')
 bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
