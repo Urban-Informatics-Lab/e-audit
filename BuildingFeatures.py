@@ -95,17 +95,17 @@ class BuildingFeatures:
     
     # process_alg takes the algorithm input and calls the appropriate method
     def process_alg(self, meter_file_path, sim_job_file_path, date_str, output_files_path, actual, sq_ft, J_conversion):
-        if self.alg == 'Euclidean':
+        if self.alg == 'Euc':
             df_sim, simjob = self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
             df_actual_t = self.format_sim_actualdata(actual) 
             self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
-            df_sim, buildingparams, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_sim, buildingparams, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
             df_actual_t = self.format_ML_actualdata(actual)
-            self.KNN(df_sim, output_files_path, feature_vector, job_id)
+            self.KNN(buildingparams, output_files_path, feature_vector, job_id, simjob_str)
 
-        elif self.alg == 'Decision Tree':
+        elif self.alg == 'DT':
             df_sim, buildingparams, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
             df_actual_t = self.format_ML_actualdata(actual)
             self.DecisionTrees(buildingparams, output_files_path, feature_vector, job_id)
@@ -428,14 +428,14 @@ class BuildingFeatures:
         building_params.index = np.arange(1, len(building_params)+1)
         building_params = building_params.reset_index()
 
-        return df_sim, building_params, feature_vector, job_id
+        return df_sim, building_params, feature_vector, job_id, simjob_str
     
-    def KNN(self, building_params, output_files_path, feature_vector, job_id):
+    def KNN(self, building_params, output_files_path, feature_vector, job_id, simjob_str):
         # create a new output files path if needed 
         Path(output_files_path).mkdir(parents=True, exist_ok=True)
-        # create a new index for merging purposes 
-        building_params.index = np.arange(1, len(building_params)+1)
-        building_params = building_params.reset_index()
+        # # create a new index for merging purposes 
+        # building_params.index = np.arange(1, len(building_params)+1)
+        # building_params = building_params.reset_index()
         # kNN classifying
         le = preprocessing.LabelEncoder()
         label=le.fit_transform(job_id)
@@ -451,16 +451,33 @@ class BuildingFeatures:
         preds['Job_ID']=preds['Job_ID'].astype(str)
         building_params['index']=building_params['index'].astype(str)
         truth['Job_ID']=truth['Job_ID'].astype(str)
-        #altered the merging code to be on the index 
-        preds = pd.merge(preds, building_params, left_on="Job_ID", right_on="index") #merge with actual building parameters to check how close the match was
-        truth = pd.merge(truth, building_params, left_on="Job_ID", right_on="index")
+        preds = pd.merge(preds, building_params, left_on="Job_ID", right_on="#") #merge with actual building parameters to check how close the match was
+        truth = pd.merge(truth, building_params, left_on="Job_ID", right_on="#")
+        preds = preds.rename(columns={'Job_ID_x': 'Job_ID'})
+        truth = truth.rename(columns={'Job_ID_x': 'Job_ID'})
+        print("Preds:")
+        print(preds)
+        print("Truth:")
+        print(truth)
         output_test_path = "/".join([output_files_path, "kNN_test_preds.csv"])
         filepath = Path(output_test_path)  
         filepath.parent.mkdir(parents=True, exist_ok=True)  
         preds.to_csv(filepath, index=False)
         print("kNN_test_preds saved")
+
         test_truth = "/".join([output_files_path, "kNN_test_true.csv"])
         truth.to_csv(test_truth, index=False) 
+        
+        list_features = list(simjob_str.columns) 
+        kNN_class_correct = pd.DataFrame(columns=list_features)
+        kNN_class_correct["Job_ID"] = y_test
+        for feature in list_features:
+            kNN_class_correct[feature] =  np.array(preds[feature] == truth[feature], dtype=int) #check whether the feature was classified correctly
+        kNN_class_correct_path = "/".join([output_files_path, "kNN_test_class_correct.csv"])
+        kNN_class_correct.to_csv(kNN_class_correct_path, index=False) #binary classifications (1 = correct)
+        kNN_rate = kNN_class_correct.mean() #calculate the correct classification rate for each feature
+        kNN_rate_correct = "/".join([output_files_path, "kNN_test_rate.csv"])
+        kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate
 
     def DecisionTrees(self, buildingparams, output_files_path, feature_vector, job_id): 
         # create output file path if needed 
@@ -543,7 +560,7 @@ class BuildingFeatures:
 # date_str = "01/01/2014"
 # sq_ft = 210887
 # J_conversion = 1 
-# bf = BuildingFeatures('Euclidean')
+# bf = BuildingFeatures('Euc')
 # bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
 
 #KNN + Decision Tree Testing
@@ -556,6 +573,6 @@ actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample 
 date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 1 
-bf = BuildingFeatures('Decision Tree')
-# bf = BuildingFeatures('KNN')
+# bf = BuildingFeatures('DT')
+bf = BuildingFeatures('KNN')
 bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
