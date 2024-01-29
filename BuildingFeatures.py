@@ -46,22 +46,22 @@ def time_stats_2(group):
   return new_grp
 
 def feature_grp_meter_file(new_group):
-  grp_month = new_group[['Electricity:Facility [J](Hourly)','month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
-  numpy_month = grp_month['Electricity:Facility [J](Hourly)'].to_numpy().flatten()
-  grp_year = new_group['Electricity:Facility [J](Hourly)'].agg(func = ['mean', 'min','max','median','std'])
+  grp_month = new_group[[meter_col_name,'month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
+  numpy_month = grp_month[meter_col_name].to_numpy().flatten()
+  grp_year = new_group[meter_col_name].agg(func = ['mean', 'min','max','median','std'])
   numpy_year = grp_year.to_numpy().flatten()
-  grp_week = new_group[['Electricity:Facility [J](Hourly)','week']].groupby('week').agg(func = ['mean', 'min', 'max', 'median', 'std'])
-  numpy_week = grp_week['Electricity:Facility [J](Hourly)'].to_numpy().flatten()
+  grp_week = new_group[[meter_col_name,'week']].groupby('week').agg(func = ['mean', 'min', 'max', 'median', 'std'])
+  numpy_week = grp_week[meter_col_name].to_numpy().flatten()
   final_array = np.concatenate((numpy_month, numpy_year, numpy_week))
   return final_array
 
 def feature_grp_meter_dir(new_group):
-  grp_month = new_group[['Electricity:Facility [J](Hourly) ','month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
-  numpy_month = grp_month['Electricity:Facility [J](Hourly) '].to_numpy().flatten()
-  grp_year = new_group['Electricity:Facility [J](Hourly) '].agg(func = ['mean', 'min','max','median','std'])
+  grp_month = new_group[[meter_col_name,'month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
+  numpy_month = grp_month[meter_col_name].to_numpy().flatten()
+  grp_year = new_group[meter_col_name].agg(func = ['mean', 'min','max','median','std'])
   numpy_year = grp_year.to_numpy().flatten()
-  grp_week = new_group[['Electricity:Facility [J](Hourly) ','week']].groupby('week').agg(func = ['mean', 'min', 'max', 'median', 'std'])
-  numpy_week = grp_week['Electricity:Facility [J](Hourly) '].to_numpy().flatten()
+  grp_week = new_group[[meter_col_name,'week']].groupby('week').agg(func = ['mean', 'min', 'max', 'median', 'std'])
+  numpy_week = grp_week[meter_col_name].to_numpy().flatten()
   final_array = np.concatenate((numpy_month, numpy_year, numpy_week))
   return final_array
 
@@ -94,24 +94,24 @@ class BuildingFeatures:
         self.alg = alg
     
     # process_alg takes the algorithm input and calls the appropriate method
-    def process_alg(self, meter_file_path, sim_job_file_path, date_str, output_files_path, actual, sq_ft, J_conversion):
+    def process_alg(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, output_files_path, sq_ft, J_conversion, actual, actual_id, actual_date):
         if self.alg == 'Euc':
-            df_sim, simjob = self.format_simdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_t = self.format_sim_actualdata(actual) 
+            df_sim, simjob = self.format_simdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_actual_t = self.format_sim_actualdata(actual, actual_id, actual_date) 
             self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
-            df_sim, buildingparams, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_t = self.format_ML_actualdata(actual)
-            self.KNN(buildingparams, output_files_path, feature_vector, job_id, simjob_str)
+            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
+            # df_actual_t = self.format_ML_actualdata(actual, actual_id, actual_date)
+            self.KNN(building_params, output_files_path, feature_vector, job_id, simjob_str)
 
         elif self.alg == 'DT':
-            df_sim, buildingparams, feature_vector, job_id = self.format_MLdata(meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_t = self.format_ML_actualdata(actual)
-            self.DecisionTrees(buildingparams, output_files_path, feature_vector, job_id)
+            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
+            # df_actual_t = self.format_ML_actualdata(actual, actual_id, actual_date)
+            self.DecisionTrees(building_params, output_files_path, feature_vector, job_id, simjob_str)
 
         else: 
-            print("Invalid Algorithm Input. Please provide 'Euclidean', 'KNN', or 'Decision Tree.'")
+            print("Invalid Algorithm Input. Please provide 'Euc', 'KNN', or 'DT.'")
     
     def Euclidean(self, df_sim, simjob, output_files_path, df_actual_t):
         #compute Euclidean distance - test set
@@ -171,14 +171,14 @@ class BuildingFeatures:
         euc_dist_after.columns = df_sim['Job_ID']
         euc_dist_after['Job_ID'] = euc_dist_after.apply(lambda x: x.idxmin(), axis=1)
         euc_dist_after['char_prem_id'] = df_actual_t['school_id'].tolist()
-        euc_dist_after_path = "/".join([output_files_path, "euc_dist_test_after_mat.csv"])
+        euc_dist_after_path = "/".join([output_files_path, "euc_dist_test_validation_mat.csv"])
         euc_dist_after.to_csv(euc_dist_after_path, index=False)
         euc_dist_preds_after = euc_dist_after[["Job_ID"]]
         euc_dist_truth_after = euc_dist_after[["char_prem_id"]]
         print("saving after results")
-        euc_dist_preds_after_path = "/".join([output_files_path, "euc_dist_preds_after.csv"])
+        euc_dist_preds_after_path = "/".join([output_files_path, "euc_dist_preds_validation.csv"])
         euc_dist_preds_after.to_csv(euc_dist_preds_after_path, index=False)
-        euc_dist_truth_after_path = "/".join([output_files_path, "euc_dist_truth_after.csv"])
+        euc_dist_truth_after_path = "/".join([output_files_path, "euc_dist_truth_validation.csv"])
         euc_dist_truth_after.to_csv(euc_dist_truth_after_path, index=False)
 
         preds = euc_dist_test_preds
@@ -202,10 +202,10 @@ class BuildingFeatures:
             truth_str = truth[feature].astype(str)
             class_correct[feature] = (preds_str == truth_str).astype(int)
         correct_rate = class_correct.mean()
-        correct_rate_path = "/".join([output_files_path, "test_rate.csv"])
+        correct_rate_path = "/".join([output_files_path, "euc_dist_test_rate.csv"])
         correct_rate.to_csv(correct_rate_path, index=False)
 
-    def format_simdata(self, meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion):
+    def format_simdata(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
             start = pd.to_datetime(date_str)
@@ -222,20 +222,20 @@ class BuildingFeatures:
                 pass
             else:
                 # J conversion 
-                df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/(3.6e+6) 
+                df[meter_col_name]=df[meter_col_name]/(3.6e+6) 
             # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
             if sq_ft == 0: 
                 df = df 
             else: 
-                df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/ sq_ft #secondary SF = 210887, primary = 73959
-            # df = df.set_index(['Electricity:Facility [J](Hourly)', 'Job_ID'])
+                df[meter_col_name]=df[meter_col_name]/ sq_ft #secondary SF = 210887, primary = 73959
+            # df = df.set_index([meter_col_name, 'Job_ID'])
             i = 0 
             # iterate through the unique Job IDs 
             for job_id in unique_ids: 
                 # gather rows with the same Job ID 
                 df_job = df[df['Job_ID'] == job_id]
                 # extract the electricity data 
-                df_job = df_job['Electricity:Facility [J](Hourly)']
+                df_job = df_job[meter_col_name]
                 # set the columns to be the drange and row data to be the electricity data 
                 df_job = df_job.transpose()
                 df_job.columns = drange.astype(str)
@@ -267,14 +267,14 @@ class BuildingFeatures:
                     pass
                 else:
                     # J conversion 
-                    df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/(3.6e+6) 
+                    df[meter_col_name]=df[meter_col_name]/(3.6e+6) 
                 # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
                 if sq_ft == 0: 
                     df = df 
                 else: 
-                    df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/ sq_ft #secondary SF = 210887, primary = 73959
+                    df[meter_col_name]=df[meter_col_name]/ sq_ft #secondary SF = 210887, primary = 73959
                 # extract only the electricity data we need 
-                df = df['Electricity:Facility [J](Hourly)']
+                df = df[meter_col_name]
                 # transform the data to the "wide" format 
                 df = df.transpose()
                 df.columns = drange.astype(str)
@@ -289,7 +289,7 @@ class BuildingFeatures:
         simjob_cols.remove(simjob_cols[0])
         return df_sim, simjob
     
-    def format_sim_actualdata(self, df_actual_path):
+    def format_sim_actualdata(self, df_actual_path, actual_id, actual_date):
         df_actual = pd.read_csv(df_actual_path)
         start = pd.to_datetime(date_str) 
         if start.is_leap_year:
@@ -298,12 +298,12 @@ class BuildingFeatures:
             hourly_periods = 8760
         drange = pd.date_range(start, periods=hourly_periods, freq='H')
         # change the index to be the length of the dataframe 
-        df_actual_t = pd.DataFrame(0., index=np.arange(309), columns=drange.astype(str).tolist()+['school_id'])
-        ids = df_actual['ID'].unique()
+        df_actual_t = pd.DataFrame(0., index=np.arange(len(df_actual)), columns=drange.astype(str).tolist()+['school_id'])
+        ids = df_actual[actual_id].unique()
         i=0
         for school_id in ids:
-            df = df_actual[df_actual['ID'] == school_id]
-            date_range = df['Date.Time']
+            df = df_actual[df_actual[actual_id] == school_id]
+            date_range = df[actual_date]
             df = df[['kWh_norm_sf']].transpose()
             df.columns = date_range.astype(str)
             df['school_id'] = school_id
@@ -313,11 +313,11 @@ class BuildingFeatures:
         print(df_actual_t) 
         return df_actual_t
   
-    def format_ML_actualdata(self, df_actual_path):
+    def format_ML_actualdata(self, df_actual_path, actual_id, actual_date):
         df_actual_after = pd.read_csv(df_actual_path)
         print(df_actual_after)
         actual_feat = []
-        grouped_actual_after = df_actual_after.groupby('ID')
+        grouped_actual_after = df_actual_after.groupby(actual_id)
         for name, group in list(grouped_actual_after): #create time series features
             fin_actual = time_stats_actual(group)
             actual_feat.append(feature_grp_actual(fin_actual))
@@ -326,7 +326,7 @@ class BuildingFeatures:
         print(df_actual_after.head)
         return df_actual_after, actual_feature_after
 
-    def format_MLdata(self, meter_file_path, sim_job_file_path, date_str, sq_ft, J_conversion):
+    def format_MLdata(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
             start = pd.to_datetime(date_str)
@@ -335,22 +335,20 @@ class BuildingFeatures:
             else: 
                 hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
-            df = pd.read_csv(meter_file_path)
-            unique_ids = df['Job_ID'].unique()
-            df_sim = []
+            df_sim = pd.read_csv(meter_file_path)
+            unique_ids = df[actual_id].unique()
+            # df_sim = []
             # if J is accounted for - have the user input 0 for the J field 
             if J_conversion == 0: 
                 pass
             else:
                 # J conversion 
-                df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/(3.6e+6) 
+                df_sim[meter_col_name]=df_sim[meter_col_name]/(3.6e+6) 
             # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
             if sq_ft == 0: 
-                df = df 
+                df_sim = df_sim 
             else: 
-                df['Electricity:Facility [J](Hourly)']=df['Electricity:Facility [J](Hourly)']/ sq_ft #secondary SF = 210887, primary = 73959
-
-            df_sim = df
+                df_sim[meter_col_name]=df_sim[meter_col_name]/ sq_ft #secondary SF = 210887, primary = 73959
             print("DF Sim: ")
             print(df_sim)
             #create time series features for each Job ID 
@@ -365,7 +363,9 @@ class BuildingFeatures:
             print("simulation data:")
             print(df_sim.head) 
         if os.path.isdir(meter_file_path):
+          
             meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
+            # meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
             start = pd.to_datetime(date_str)
             if start.is_leap_year:
@@ -389,12 +389,12 @@ class BuildingFeatures:
                     pass
                 else:
                     # J conversion 
-                    df['Electricity:Facility [J](Hourly) ']=df['Electricity:Facility [J](Hourly) ']/(3.6e+6) 
+                    df[meter_col_name]=df[meter_col_name]/(3.6e+6) 
                 # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
                 if sq_ft == 0: 
                     df = df 
                 else: 
-                    df['Electricity:Facility [J](Hourly) ']=df['Electricity:Facility [J](Hourly) ']/ sq_ft #secondary SF = 210887, primary = 73959
+                    df[meter_col_name]=df[meter_col_name]/ sq_ft #secondary SF = 210887, primary = 73959
                 df_sim.append(df)
             print("DF SIM: ")
             print(type(df_sim))
@@ -427,7 +427,6 @@ class BuildingFeatures:
         # create a new index for merging purposes 
         building_params.index = np.arange(1, len(building_params)+1)
         building_params = building_params.reset_index()
-
         return df_sim, building_params, feature_vector, job_id, simjob_str
     
     def KNN(self, building_params, output_files_path, feature_vector, job_id, simjob_str):
@@ -479,17 +478,17 @@ class BuildingFeatures:
         kNN_rate_correct = "/".join([output_files_path, "kNN_test_rate.csv"])
         kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate
 
-    def DecisionTrees(self, buildingparams, output_files_path, feature_vector, job_id): 
+    def DecisionTrees(self, building_params, output_files_path, feature_vector, job_id, simjob_str): 
         # create output file path if needed 
         Path(output_files_path).mkdir(parents=True, exist_ok=True)
 
         # multiple decision trees
         # split the data - 80/20 train/test split
-        X_train, X_test, y_train, y_test = train_test_split(feature_vector, buildingparams,random_state=203,test_size=0.2,shuffle=True)
+        X_train, X_test, y_train, y_test = train_test_split(feature_vector, building_params,random_state=203,test_size=0.2,shuffle=True)
         print("Building params:")
-        print(buildingparams)
+        print(building_params)
         y_test = y_test.reset_index(inplace=False)
-        list_features = list(buildingparams.columns)
+        list_features = list(building_params.columns)
         list_features.remove('Job_ID') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
         list_features.remove('index') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
         list_features.remove('#') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
@@ -548,6 +547,9 @@ class BuildingFeatures:
             y_test.to_csv(y_test_preds_path, index=False)
             multi_class_correct_path = "/".join([output_files_path, "multiple_trees_class_correct.csv"])
             multi_class_correct.to_csv(multi_class_correct_path, index=False) 
+
+            multiple_trees_rate_path = f"{output_files_path}/multiple_trees_test_rate_{feature}.csv"
+            
             print("trees test results saved!")
 
 # #EUC testing 
@@ -564,15 +566,17 @@ class BuildingFeatures:
 # bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
 
 #KNN + Decision Tree Testing
-meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
+meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv"
 # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
-sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
-output_files_path = "/Users/dipashreyasur/Desktop/DT_Meter_Dir" 
-actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
-
+sim_job_file_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/SimJobIndexPrimary.csv"
+output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/run" 
+df_actual_t = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
+actual_id = 'ID'
+actual_date = 'Date.Time'
+meter_col_name = 'Electricity:Facility'
 date_str = "01/01/2014"
 sq_ft = 210887
-J_conversion = 1 
+J_conversion = 0 
 # bf = BuildingFeatures('DT')
-bf = BuildingFeatures('KNN')
-bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
+bf = BuildingFeatures('Euc')
+bf.process_alg(meter_files_dir, meter_col_name, sim_job_file_path, date_str, output_files_path, sq_ft, J_conversion, df_actual_t, actual_id, actual_date)
