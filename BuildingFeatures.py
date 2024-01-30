@@ -202,7 +202,12 @@ class BuildingFeatures:
             truth_str = truth[feature].astype(str)
             class_correct[feature] = (preds_str == truth_str).astype(int)
         correct_rate = class_correct.mean()
+        print("correct rate:")
+        print(correct_rate)
         correct_rate_path = "/".join([output_files_path, "euc_dist_test_rate.csv"])
+        correct_rate = correct_rate.reset_index()
+        correct_rate.columns = ['Building_Feature', 'Correct_Rate']
+        correct_rate = correct_rate.iloc[1: , :]
         correct_rate.to_csv(correct_rate_path, index=False)
 
     def format_simdata(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion):
@@ -475,6 +480,11 @@ class BuildingFeatures:
         kNN_class_correct_path = "/".join([output_files_path, "kNN_test_class_correct.csv"])
         kNN_class_correct.to_csv(kNN_class_correct_path, index=False) #binary classifications (1 = correct)
         kNN_rate = kNN_class_correct.mean() #calculate the correct classification rate for each feature
+        kNN_rate = kNN_rate.reset_index()
+        kNN_rate.columns = ['Building_Feature', 'Correct_Rate']
+        kNN_rate = kNN_rate.iloc[2:, :].reset_index(drop=True)
+        print("correct rate:")
+        print(kNN_rate)
         kNN_rate_correct = "/".join([output_files_path, "kNN_test_rate.csv"])
         kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate
 
@@ -521,6 +531,7 @@ class BuildingFeatures:
 
             multi_class_correct[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
             multi_class_test_preds[feature] = y_predicted #predictions on test set
+            # multi_correct_rate = multi_class_correct[feature].mean()
 
             correct_path = f"{output_files_path}/multiple_trees_class_correct_features"
             Path(correct_path).mkdir(parents=True, exist_ok=True)
@@ -539,18 +550,24 @@ class BuildingFeatures:
             y_test_path = f"{test_true_path}/test_true_{feature}.csv"
             y_test[[feature]].to_csv(y_test_path, index=False)
 
+            # create separate folder to contain all the features 
+            # test_rate_path = f"{output_files_path}/multiple_trees_test_rate_features"
+            # Path(test_rate_path).mkdir(parents=True, exist_ok=True)
+            # rate_test_path = f"{test_rate_path}/test_true_{feature}.csv"
+            # multi_correct_rate[[feature]].to_csv(rate_test_path, index=False)
+
             print("saving results...(trees)")
 
-            multi_class_test_preds_path = "/".join([output_files_path, "multiple_trees_test_preds.csv"])
-            multi_class_test_preds.to_csv(multi_class_test_preds_path, index=False)
-            y_test_preds_path = "/".join([output_files_path, "multiple_trees_test_true.csv"])
-            y_test.to_csv(y_test_preds_path, index=False)
-            multi_class_correct_path = "/".join([output_files_path, "multiple_trees_class_correct.csv"])
-            multi_class_correct.to_csv(multi_class_correct_path, index=False) 
+        multi_class_test_preds_path = "/".join([output_files_path, "multiple_trees_test_preds.csv"])
+        multi_class_test_preds.to_csv(multi_class_test_preds_path, index=False)
+        y_test_preds_path = "/".join([output_files_path, "multiple_trees_test_true.csv"])
+        y_test.to_csv(y_test_preds_path, index=False)
+        multi_class_correct_path = "/".join([output_files_path, "multiple_trees_class_correct.csv"])
+        multi_class_correct.to_csv(multi_class_correct_path, index=False) 
 
-            multiple_trees_rate_path = f"{output_files_path}/multiple_trees_test_rate_{feature}.csv"
+        multiple_trees_rate_path = f"{output_files_path}/multiple_trees_test_rate_{feature}.csv"
             
-            print("trees test results saved!")
+        print("trees test results saved!")
 
 # #EUC testing 
 # meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
@@ -578,5 +595,5 @@ date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 0 
 # bf = BuildingFeatures('DT')
-bf = BuildingFeatures('Euc')
+bf = BuildingFeatures('DT')
 bf.process_alg(meter_files_dir, meter_col_name, sim_job_file_path, date_str, output_files_path, sq_ft, J_conversion, df_actual_t, actual_id, actual_date)
