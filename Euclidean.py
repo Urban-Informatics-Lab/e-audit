@@ -16,7 +16,7 @@ print("meter directory inputed")
 meter_files = glob.glob(os.path.join(meter_files_path, "*.csv"))
 
 #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
-date_str = '12/31/2014'
+date_str = '01/01/2014'
 start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
 hourly_periods = 8760
 drange = pd.date_range(start, periods=hourly_periods, freq='H')
@@ -30,7 +30,7 @@ for f in meter_files:
     df = pd.read_csv(f)
     df = pd.DataFrame(df)
     df = df.transpose()
-    df = df / 3.6e+6
+    # df = df / 3.6e+6
     df = df / 210887 #secondary SF = 210887, primary = 73959
     df.columns = drange.astype(str)
     df_sim.iloc[i] = df
@@ -85,7 +85,7 @@ output_files_path = input('Enter a directory path for the output files: ')
 print(output_files_path + "output file path loaded")
  
 
-output_test_path = "/".join([output_files_path, "euc_dist_test_mat.csv"])
+output_test_path = "/".join([output_files_path, "euc_dist_orig_test_mat.csv"])
 filepath = Path(output_test_path)  
 filepath.parent.mkdir(parents=True, exist_ok=True)  
 euc_dist_test.to_csv(filepath, index=False)
@@ -97,68 +97,15 @@ euc_dist_test_preds = euc_dist_test_preds.merge(simjob, on='Job_ID', how='left')
 euc_dist_test_truth = euc_dist_test_truth.rename(columns={'Job_ID_actual': 'Job_ID'})
 euc_dist_test_truth = euc_dist_test_truth.merge(simjob, on='Job_ID', how='left') #merge with building parameters
 
-output_test_preds_path = "/".join([output_files_path, "euc_dist_test_preds.csv"])
+output_test_preds_path = "/".join([output_files_path, "euc_dist_orig_test_preds.csv"])
 euc_dist_test_preds.to_csv(output_test_preds_path, index=False)
 
-output_test_truth_path = "/".join([output_files_path, "euc_dist_test_truth.csv"])
+output_test_truth_path = "/".join([output_files_path, "euc_dist_orig_test_truth.csv"])
 euc_dist_test_preds.to_csv(output_test_truth_path, index=False)
 
 print("saved test results")
 
 ##################################################################################################
-#read in actual data - before retrofits were installed, transform to "wide" format where each row is a simulation and columns are each hour of the year
-print("loading before data")
-df_actual_before_path = input('Enter a file path for the before data: ')
-print("before data inputed")
-if os.path.exists(df_actual_before_path):
-    print('The before data file exists.')
-
-    with open(df_actual_before_path, 'r', encoding='utf-8-sig') as f:
-        lines = f.readlines()
-
-        print("The before data has been read.")
-else:
-    print('The before data file does NOT exist')
-
-df_actual_before = pd.read_csv(df_actual_before_path)
-df_actual_before_t = pd.DataFrame(0., index=np.arange(309), columns=drange.astype(str).tolist()+['school_id'])
-ids = df_actual_before['char_prem_id'].unique()
-i=0
-for school_id in ids:
-    df = df_actual_before[df_actual_before['char_prem_id'] == school_id]
-    date_range = df['date_time']
-    df = df[['kWh_norm_sf']]
-    df = df.transpose()
-    df.columns = date_range.astype(str)
-    df['school_id'] = school_id
-    df_actual_before_t.iloc[i] = df
-    i=i+1
-#compute Euclidean distance - validation, before
-actual2 = df_actual_before_t.iloc[:, :8760] #remove school ID column
-actual2 = actual2.to_numpy() #ensure all data is numeric
-df_sim2 = df_sim.iloc[:, :8760]
-df_sim2 = df_sim2.to_numpy()
-#calculate euclidean distance between each simulation and each actual time series
-print("calculating before matrix")
-euc_dist_before = scipy.spatial.distance.cdist(actual2,df_sim2,metric = 'euclidean') #resulting df - each row is an actual school, each column is a simulation
-euc_dist_before = pd.DataFrame(euc_dist_before)
-euc_dist_before.columns = df_sim['Job_ID']
-euc_dist_before['Job_ID'] = euc_dist_before.apply(lambda x: x.idxmin(), axis=1) #select minimum distance as closest match
-euc_dist_before['char_prem_id'] = df_actual_before_t['school_id'].tolist() #join with the actual school ids
-# save the euc dist before file 
-euc_dist_before_path = "/".join([output_files_path, "euc_dist_test_before_mat.csv"])
-euc_dist_before.to_csv(euc_dist_before_path, index=False)
-# euc_dist_before.to_csv("/Users/dipashreyasur/Desktop/Classifying code/Euclidean_results_DS/euc_dist_before_mat.csv", index=False)
-euc_dist_preds_before = euc_dist_before[["Job_ID"]] #predictions
-euc_dist_truth_before = euc_dist_before[["char_prem_id"]] #truth
-
-print("saving before results")
-euc_dist_preds_before_path = "/".join([output_files_path, "euc_dist_preds_before.csv"])
-euc_dist_preds_before.to_csv(euc_dist_preds_before_path, index=False)
-euc_dist_truth_before_path = "/".join([output_files_path, "euc_dist_truth_before.csv"])
-euc_dist_truth_before.to_csv(euc_dist_truth_before_path, index=False)
-
-#repeat the same process for post-retrofit installation
 #read in actual data - after retrofits were installed
 df_actual_after_path = input('Enter a file path for the after data: ')
 if os.path.exists(df_actual_after_path):
@@ -177,11 +124,11 @@ start = pd.to_datetime(date_str) - pd.Timedelta(days=364)
 hourly_periods = 8760
 drange = pd.date_range(start, periods=hourly_periods, freq='H')
 df_actual_after_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
-ids = df_actual_after['char_prem_id'].unique()
+ids = df_actual_after['ID'].unique()
 i=0
 for school_id in ids:
-    df = df_actual_after[df_actual_after['char_prem_id'] == school_id]
-    date_range = df['date_time']
+    df = df_actual_after[df_actual_after['ID'] == school_id]
+    date_range = df['Date.Time']
     df = df[['kWh_norm_sf']]
     df = df.transpose()
     df.columns = date_range.astype(str)
@@ -200,14 +147,14 @@ euc_dist_after = pd.DataFrame(euc_dist_after)
 euc_dist_after.columns = df_sim['Job_ID']
 euc_dist_after['Job_ID'] = euc_dist_after.apply(lambda x: x.idxmin(), axis=1)
 euc_dist_after['char_prem_id'] = df_actual_after_t['school_id'].tolist()
-euc_dist_after_path = "/".join([output_files_path, "euc_dist_test_after_mat.csv"])
+euc_dist_after_path = "/".join([output_files_path, "euc_dist_orig_test_after_mat.csv"])
 euc_dist_after.to_csv(euc_dist_after_path, index=False)
 euc_dist_preds_after = euc_dist_after[["Job_ID"]]
 euc_dist_truth_after = euc_dist_after[["char_prem_id"]]
 print("saving after results")
-euc_dist_preds_after_path = "/".join([output_files_path, "euc_dist_preds_after.csv"])
+euc_dist_preds_after_path = "/".join([output_files_path, "euc_dist_orig_preds_after.csv"])
 euc_dist_preds_after.to_csv(euc_dist_preds_after_path, index=False)
-euc_dist_truth_after_path = "/".join([output_files_path, "euc_dist_truth_after.csv"])
+euc_dist_truth_after_path = "/".join([output_files_path, "euc_dist_orig_truth_after.csv"])
 euc_dist_truth_after.to_csv(euc_dist_truth_after_path, index=False)
 
 preds = euc_dist_test_preds
