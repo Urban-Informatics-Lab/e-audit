@@ -18,3 +18,43 @@ To run the classification step, the simulation output for hourly electricity dat
 There are three classification algorithms included in this package: Euclidean distance, k-nearest neighbors, and decision trees. The Euclidean distance matching algorithm finds the distance between two time series: the matching scenario is the one with the closest distance between its time series and the one provided. For the machine learning algorithms, time series statistics (mean, median, min, max, standard deviation) are calculated at weekly, monthly, and yearly intervals, and these statistics are used to perform the supervised learning. 
 
 The classification functions can take the electricity load profile from a building or a group of buildings and provide a predicted classification for each building parameter that was defined by the simulated database. 
+
+## Usage
+After importing the package, create an instance of the BuildingFeatures class. The BuildingFeatures class has a constructor that takes in the algorithm type as a parameter. For the algorithm type parameter, input ‘KNN’ for k-nearest neighbors, ‘DT’ for decision trees, or ‘Euc’ for Euclidean. 
+
+Next, use the `process_alg()` method to generate the building feature classification from the building electricity load data. 
+
+process_alg() takes in the following parameters: 
+- Meter file(s) - file path (*str*)
+- Meter file(s) - electricity column (*str*)
+- Meter file(s) - Start Date - format “MM/DD/YYYY” (*str*)
+- jEplus simulation file - file path (*str*)
+- Actual data - file path (*str*)
+- Actual data - building id (*str*)
+- Actual data - date column (*str*)
+- sq_ft (*int*) 
+- J_conversion (*int*) - 1 if conversion is needed from J to kWh, 0 if not 
+- Output files - file path (*str*) 
+
+## Example 
+Let's create `bf` as an instance of the BuildingFeatures class to run the k-nearest neighbors algorithm. 
+
+    bf = BuildingFeatures('KNN')
+
+    bf.process_alg(
+        meter_path = "/Path_to/Meters_Example_IndividualFiles", 
+        meter_col = "Electricity:Facility", 
+        meter_date = "MM/DD/YYYY", 
+        sim_job_path = "/Path_to/SimJobIndex_Example.csv", 
+        actual_path = "/Path_to/Sample Building Electricity Data.csv", 
+        actual_id = "ID", 
+        actual_date = "Date.Time",
+        actual_col = "kWh_norm_sf",
+        sq_ft = 2000,
+        J_conv = 0    
+        output_path = "/Path_to/Output_files", 
+    )
+
+## Tips 
+
+- If errors arise when calling `process_alg()` check the variables used for each input. Refer to the meter file path as `meter_path`, meter column name as `meter_col`, etc. 
