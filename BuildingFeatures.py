@@ -114,7 +114,7 @@ class BuildingFeatures:
 
         elif self.alg == 'KNN':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
-            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col)
+            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
             self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_col, actual_date)
 
         elif self.alg == 'DT':
@@ -660,7 +660,7 @@ class BuildingFeatures:
         return df_sim, building_params, feature_vector, job_id, simjob_str
   
 # Testing
-bf = BuildingFeatures('DT')
+bf = BuildingFeatures('Euc')
 bf.process_alg(
     meter_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv",
     meter_col = "Electricity:Facility",
@@ -672,5 +672,5 @@ bf.process_alg(
     actual_col = "kWh_norm_sf", 
     sq_ft = 210887,
     J_conv = 0, 
-    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/DT_BF_Updated"
+    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/save/Euc_BF"
 )
