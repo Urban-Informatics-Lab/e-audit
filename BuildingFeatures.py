@@ -94,27 +94,109 @@ class BuildingFeatures:
         self.alg = alg
     
     # process_alg takes the algorithm input and calls the appropriate method
-    def process_alg(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, output_files_path, sq_ft, J_conversion, actual, actual_id, actual_date):
+    def process_alg(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, output_files_path, sq_ft, J_conversion, actual_path, actual_id, actual_date):
         if self.alg == 'Euc':
             df_sim, simjob = self.format_simdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
-            df_actual_t = self.format_sim_actualdata(actual, actual_id, actual_date) 
+            df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date) 
             self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
-            # df_actual_t = self.format_ML_actualdata(actual, actual_id, actual_date)
-            self.KNN(building_params, output_files_path, feature_vector, job_id, simjob_str)
+            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id)
+            self.KNN(building_params, output_files_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
         elif self.alg == 'DT':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
-            # df_actual_t = self.format_ML_actualdata(actual, actual_id, actual_date)
-            self.DecisionTrees(building_params, output_files_path, feature_vector, job_id, simjob_str)
+            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id)
+            self.DecisionTrees(building_params, output_files_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
         else: 
             print("Invalid Algorithm Input. Please provide 'Euc', 'KNN', or 'DT.'")
-    
+
+    def KNN(self, building_params, output_files_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after):
+        # create a new output files path if needed 
+        Path(output_files_path).mkdir(parents=True, exist_ok=True)
+        # # create a new index for merging purposes 
+        # building_params.index = np.arange(1, len(building_params)+1)
+        # building_params = building_params.reset_index()
+        # kNN classifying
+        le = preprocessing.LabelEncoder()
+        label=le.fit_transform(job_id)
+        # split the data - 80/20 training/testing
+        X_train, X_test, y_train, y_test = train_test_split(feature_vector, label,random_state=135,test_size=0.2,shuffle=True)
+        # train the model
+        model = KNeighborsClassifier(n_neighbors=1)
+        model.fit(X_train,y_train)
+        # test on the subset 
+        y_predicted = model.predict(X_test)
+        preds = pd.DataFrame(y_predicted.T, columns = ['Job_ID'])
+        truth = pd.DataFrame(y_test.T, columns = ['Job_ID'])
+        preds['Job_ID']=preds['Job_ID'].astype(str)
+        building_params['index']=building_params['index'].astype(str)
+        truth['Job_ID']=truth['Job_ID'].astype(str)
+        preds = pd.merge(preds, building_params, left_on="Job_ID", right_on="#") #merge with actual building parameters to check how close the match was
+        truth = pd.merge(truth, building_params, left_on="Job_ID", right_on="#")
+        preds = preds.rename(columns={'Job_ID_x': 'Job_ID'})
+        truth = truth.rename(columns={'Job_ID_x': 'Job_ID'})
+
+        print("Preds columns", preds.columns)
+        print("Truth columns", truth.columns)
+
+        drop_col = ['Job_ID_y', 'index', '#'] 
+        truth.drop(columns=drop_col, inplace=True)
+        preds.drop(columns=drop_col, inplace=True)
+
+        print("Preds:")
+        print(preds)
+        print("Truth:")
+        print(truth)
+        output_test_path = "/".join([output_files_path, "kNN_test_preds.csv"])
+        filepath = Path(output_test_path)  
+        filepath.parent.mkdir(parents=True, exist_ok=True)  
+        preds.to_csv(filepath, index=False)
+        print("kNN_test_preds saved")
+
+        test_truth = "/".join([output_files_path, "kNN_test_true.csv"])
+        truth.to_csv(test_truth, index=False) 
+
+        list_features = list(simjob_str.columns) 
+        print("list_features: ", list_features)
+        list_features = [col for col in list_features if col != '#']
+        kNN_class_correct = pd.DataFrame(columns=list_features)
+        for feature in list_features:
+            kNN_class_correct[feature] =  np.array(preds[feature] == truth[feature], dtype=int) #check whether the feature was classified correctly
+
+        kNN_class_correct['Job_ID'] = preds['Job_ID']
+        print("knn class correct:")
+        print(kNN_class_correct)
+        kNN_class_correct_path = "/".join([output_files_path, "kNN_test_class_correct.csv"])
+        kNN_class_correct.to_csv(kNN_class_correct_path, index=False) #binary classifications (1 = correct)
+        kNN_rate = kNN_class_correct.mean() #calculate the correct classification rate for each feature
+        kNN_rate = kNN_rate.reset_index()
+        kNN_rate.columns = ['Building_Feature', 'Correct_Rate']
+        kNN_rate = kNN_rate.iloc[2:, :].reset_index(drop=True)
+        print("correct rate:")
+        print(kNN_rate)
+        kNN_rate_correct = "/".join([output_files_path, "kNN_test_rate.csv"])
+        kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate
+
+        # NEW VALIDATION PART! 
+        actual_feat = []
+        print(type(df_actual_after))
+        df_actual_after = pd.DataFrame(df_actual_after)
+        grouped_actual_after = df_actual_after.groupby('ID')
+        for name, group in list(grouped_actual_after): #create time series features
+            fin_actual = time_stats_actual(group)
+        actual_feat.append(feature_grp_actual(fin_actual))
+        actual_feature_after = np.array(actual_feat)
+
+        kNN_preds_after = pd.DataFrame(columns=["ID","Job_ID"])
+        kNN_preds_after["ID"] = df_actual_after.ID.unique()
+        kNN_preds_after["Job_ID"] = model.predict(actual_feature_after)
+        kNN_preds_after_path = "/".join([output_files_path, "kNN_validation_preds_after.csv"])
+        kNN_preds_after.to_csv(kNN_preds_after_path, index=False) #binary classifications (1 = correct)
+
     def Euclidean(self, df_sim, simjob, output_files_path, df_actual_t):
-        #compute Euclidean distance - test set
         print("DF sim loaded: ")
         print(df_sim)
         np.random.seed(1)
@@ -132,8 +214,8 @@ class BuildingFeatures:
 
         euc_dist_test = scipy.spatial.distance.cdist(test2,train2,metric = 'euclidean') 
         euc_dist_test = pd.DataFrame(euc_dist_test) #resulting df - each row is job from the test set, each column is a job from the training set
-        euc_dist_test = scipy.spatial.distance.cdist(test2,train2,metric = 'euclidean') 
-        euc_dist_test = pd.DataFrame(euc_dist_test) #resulting df - each row is job from the test set, each column is a job from the training set
+        # euc_dist_test = scipy.spatial.distance.cdist(test2,train2,metric = 'euclidean') 
+        # euc_dist_test = pd.DataFrame(euc_dist_test) #resulting df - each row is job from the test set, each column is a job from the training set
         print(euc_dist_test)
 
         euc_dist_test.columns = train['Job_ID']
@@ -145,7 +227,7 @@ class BuildingFeatures:
         filepath.parent.mkdir(parents=True, exist_ok=True)  
         euc_dist_test.to_csv(filepath, index=False)
         print("euc_dist_test_mat saved")
-        
+
         euc_dist_test_preds = euc_dist_test[['Job_ID']] #predicted match
         euc_dist_test_truth = euc_dist_test[['Job_ID_actual']] #actual job ID
         euc_dist_test_preds = euc_dist_test_preds.merge(simjob, on='Job_ID', how='left') #merge with building parameters
@@ -209,6 +291,135 @@ class BuildingFeatures:
         correct_rate.columns = ['Building_Feature', 'Correct_Rate']
         correct_rate = correct_rate.iloc[1: , :]
         correct_rate.to_csv(correct_rate_path, index=False)
+    
+    def DecisionTrees(self, building_params, output_files_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after): 
+       # create output file path if needed 
+        Path(output_files_path).mkdir(parents=True, exist_ok=True)
+        # multiple decision trees
+        # split the data - 80/20 train/test split
+        X_train, X_test, y_train, y_test = train_test_split(feature_vector, building_params,random_state=203,test_size=0.2,shuffle=True)
+
+        print("Building params:")
+        print(building_params)
+        y_test = y_test.reset_index(inplace=False)
+        list_features = list(building_params.columns)
+        list_features.remove('Job_ID') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
+        list_features.remove('index') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
+        list_features.remove('#') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
+        print("List Features:")
+        print(list_features) #check that it's only the features we want
+
+        #create empty dataframes before for loop
+        multi_class_correct = pd.DataFrame(columns=list_features)
+        multi_class_test_preds = pd.DataFrame(columns=list_features)
+        mult_tree_preds_after = pd.DataFrame(columns=list_features)
+
+        id = y_test.Job_ID.unique()
+        multi_class_test_preds.insert(0, 'Job_ID', id)
+        multi_class_correct.insert(0, 'Job_ID', id)
+
+        drop_col = ['level_0', 'index', '#'] 
+        y_test.drop(columns=drop_col, inplace=True)
+        all_correct_rates_df = pd.DataFrame(columns=['Correct_Rate', 'Building_Feature'])
+        correct_rates = []
+        building_features_list = []
+
+        #create column with actual building IDs
+        #set hyperparameters for tuning each decision tree
+        max_depth_range = [4,5,6,7,8,9,10,11,12,15,20,30,40,50,70,90,120,150]
+        sample_split_range = list(range(2, 50))
+        leaf_range = list(range(1,40))
+        tree_param = [{'criterion': ['gini'], 'max_depth': max_depth_range, 'splitter': ['random','best']},
+                    {'min_samples_split': sample_split_range, 'min_samples_leaf': leaf_range}]
+
+        #this for loop saves the results after each feature in case running the code times out and the script fails
+        for feature in list_features:
+            print(feature)
+            print(y_train["{}".format(feature)].value_counts())
+            clf = GridSearchCV(DecisionTreeClassifier(), tree_param, cv=2, scoring='accuracy') #hyperparameter tuning 
+            clf_feature = clf.fit(X_train, y_train["{}".format(feature)]) #create a decision tree for each building feature
+            print(clf_feature.best_estimator_)
+            y_predicted = clf_feature.predict(X_test)
+            print("y predicted")
+            print(feature)
+            print(y_predicted)
+
+            multi_class_correct[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
+            multi_class_test_preds[feature] = y_predicted #predictions on test set
+
+            #  multi_class_correct_rate[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
+            mult_drop_id = multi_class_correct.drop(columns='Job_ID')
+            multi_class_correct_rate = mult_drop_id.mean() 
+
+            correct_rates.append(multi_class_correct_rate[feature])
+            building_features_list.append(feature)
+
+            # multi_class_correct_rate['Building Feature'] = multi_class_correct_rate.index
+            # multi_class_correct_rate = multi_class_correct_rate.reset_index(inplace=True)
+
+            # mult_tree_preds_after["ID"] = df_actual_after.ID.unique()
+            mult_tree_preds_after[feature] = clf_feature.predict(actual_feature_after) #predictions on post-retrofit data
+            print("mult tree preds after: ", mult_tree_preds_after)
+            # multi_class_correct_rate["ID"] = y_test.Job_ID.unique()
+            # multi_correct_rate = multi_class_correct[feature].mean()
+
+            correct_path = f"{output_files_path}/multiple_trees_class_correct_features"
+            Path(correct_path).mkdir(parents=True, exist_ok=True)
+            multi_class_correct_path = f"{correct_path}/class_correct_{feature}.csv"
+            multi_class_correct[[feature]].to_csv(multi_class_correct_path, index=False)
+
+            # create separate folder to contain all the features 
+            test_preds_path = f"{output_files_path}/multiple_trees_test_preds_features"
+            Path(test_preds_path).mkdir(parents=True, exist_ok=True)
+            multi_class_test_preds_path = f"{test_preds_path}/test_preds_{feature}.csv"
+            multi_class_test_preds[[feature]].to_csv(multi_class_test_preds_path, index=False)
+
+            # create separate folder to contain all the features 
+            test_true_path = f"{output_files_path}/multiple_trees_test_true_features"
+            Path(test_true_path).mkdir(parents=True, exist_ok=True)
+            y_test_path = f"{test_true_path}/test_true_{feature}.csv"
+            y_test[[feature]].to_csv(y_test_path, index=False)
+
+            # create separate folder to contain all the features 
+            preds_validation = f"{output_files_path}/multiple_trees_preds_validation_features"
+            Path(preds_validation).mkdir(parents=True, exist_ok=True)
+            preds_validation_path = f"{preds_validation}/preds_validation_{feature}.csv"
+            mult_tree_preds_after[[feature]].to_csv(preds_validation_path, index=False)
+
+            # create separate folder to contain all the features 
+            test_rate_path = f"{output_files_path}/multiple_trees_test_rate_features"
+            rate_test_path = f"{test_rate_path}/test_rate_{feature}.csv"
+
+            Path(test_rate_path).mkdir(parents=True, exist_ok=True)
+            pd.DataFrame({
+                'Correct_Rate': [multi_class_correct_rate[feature]],
+                'Building_Feature': [feature]
+            }).to_csv(rate_test_path, index=False)
+            # multi_class_correct_rate[[feature]].to_csv(rate_test_path, index=False)
+
+            print("saving results...(trees)")
+
+        all_correct_rates_df = pd.DataFrame({
+            'Building_Feature': building_features_list, 
+            'Correct_Rate': correct_rates
+        })
+
+        multi_class_test_preds_path = "/".join([output_files_path, "multiple_trees_test_preds.csv"])
+        multi_class_test_preds.to_csv(multi_class_test_preds_path, index=False)
+        y_test_preds_path = "/".join([output_files_path, "multiple_trees_test_true.csv"])
+        y_test.to_csv(y_test_preds_path, index=False)
+        multi_class_correct_path = "/".join([output_files_path, "multiple_trees_class_correct.csv"])
+        multi_class_correct.to_csv(multi_class_correct_path, index=False) 
+
+
+        multiple_trees_rate_path = f"{output_files_path}/multiple_trees_test_rate.csv"
+        all_correct_rates_df.to_csv(multiple_trees_rate_path, index=False)
+            
+        print("trees test results saved!")
+
+        mult_tree_preds_after_path = "/".join([output_files_path, "multiple_trees_validation_preds_after.csv"])
+        mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
+        print("trees validation results saved!")
 
     def format_simdata(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
@@ -293,6 +504,22 @@ class BuildingFeatures:
         simjob_cols = list(simjob.columns)
         simjob_cols.remove(simjob_cols[0])
         return df_sim, simjob
+
+    def format_ML_actualdata(self, df_actual_path, actual_id):
+        df_actual_after = pd.read_csv(df_actual_path)
+        print(df_actual_after)
+        actual_feat = []
+        grouped_actual_after = df_actual_after.groupby(actual_id)
+        for name, group in list(grouped_actual_after): #create time series features
+            fin_actual = time_stats_actual(group)
+            actual_feat.append(feature_grp_actual(fin_actual))
+        actual_feature_after = np.array(actual_feat)
+        # df_actual_after = pd.DataFrame(df_actual_after)
+        print("actual data loaded")
+        print(df_actual_after.head)
+        print(type(df_actual_after))
+        print("DF ACTUAL AFTER")
+        return df_actual_after, actual_feature_after
     
     def format_sim_actualdata(self, df_actual_path, actual_id, actual_date):
         df_actual = pd.read_csv(df_actual_path)
@@ -303,7 +530,7 @@ class BuildingFeatures:
             hourly_periods = 8760
         drange = pd.date_range(start, periods=hourly_periods, freq='H')
         # change the index to be the length of the dataframe 
-        df_actual_t = pd.DataFrame(0., index=np.arange(len(df_actual)), columns=drange.astype(str).tolist()+['school_id'])
+        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
         ids = df_actual[actual_id].unique()
         i=0
         for school_id in ids:
@@ -317,20 +544,7 @@ class BuildingFeatures:
         print("Actual data: ")
         print(df_actual_t) 
         return df_actual_t
-  
-    def format_ML_actualdata(self, df_actual_path, actual_id, actual_date):
-        df_actual_after = pd.read_csv(df_actual_path)
-        print(df_actual_after)
-        actual_feat = []
-        grouped_actual_after = df_actual_after.groupby(actual_id)
-        for name, group in list(grouped_actual_after): #create time series features
-            fin_actual = time_stats_actual(group)
-            actual_feat.append(feature_grp_actual(fin_actual))
-        actual_feature_after = np.array(actual_feat)
-        print("actual data loaded")
-        print(df_actual_after.head)
-        return df_actual_after, actual_feature_after
-
+    
     def format_MLdata(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
@@ -433,160 +647,12 @@ class BuildingFeatures:
         building_params.index = np.arange(1, len(building_params)+1)
         building_params = building_params.reset_index()
         return df_sim, building_params, feature_vector, job_id, simjob_str
-    
-    def KNN(self, building_params, output_files_path, feature_vector, job_id, simjob_str):
-        # create a new output files path if needed 
-        Path(output_files_path).mkdir(parents=True, exist_ok=True)
-        # # create a new index for merging purposes 
-        # building_params.index = np.arange(1, len(building_params)+1)
-        # building_params = building_params.reset_index()
-        # kNN classifying
-        le = preprocessing.LabelEncoder()
-        label=le.fit_transform(job_id)
-        # split the data - 80/20 training/testing
-        X_train, X_test, y_train, y_test = train_test_split(feature_vector, label,random_state=135,test_size=0.2,shuffle=True)
-        # train the model
-        model = KNeighborsClassifier(n_neighbors=1)
-        model.fit(X_train,y_train)
-        # test on the subset 
-        y_predicted = model.predict(X_test)
-        preds = pd.DataFrame(y_predicted.T, columns = ['Job_ID'])
-        truth = pd.DataFrame(y_test.T, columns = ['Job_ID'])
-        preds['Job_ID']=preds['Job_ID'].astype(str)
-        building_params['index']=building_params['index'].astype(str)
-        truth['Job_ID']=truth['Job_ID'].astype(str)
-        preds = pd.merge(preds, building_params, left_on="Job_ID", right_on="#") #merge with actual building parameters to check how close the match was
-        truth = pd.merge(truth, building_params, left_on="Job_ID", right_on="#")
-        preds = preds.rename(columns={'Job_ID_x': 'Job_ID'})
-        truth = truth.rename(columns={'Job_ID_x': 'Job_ID'})
-        print("Preds:")
-        print(preds)
-        print("Truth:")
-        print(truth)
-        output_test_path = "/".join([output_files_path, "kNN_test_preds.csv"])
-        filepath = Path(output_test_path)  
-        filepath.parent.mkdir(parents=True, exist_ok=True)  
-        preds.to_csv(filepath, index=False)
-        print("kNN_test_preds saved")
-
-        test_truth = "/".join([output_files_path, "kNN_test_true.csv"])
-        truth.to_csv(test_truth, index=False) 
-        
-        list_features = list(simjob_str.columns) 
-        kNN_class_correct = pd.DataFrame(columns=list_features)
-        kNN_class_correct["Job_ID"] = y_test
-        for feature in list_features:
-            kNN_class_correct[feature] =  np.array(preds[feature] == truth[feature], dtype=int) #check whether the feature was classified correctly
-        kNN_class_correct_path = "/".join([output_files_path, "kNN_test_class_correct.csv"])
-        kNN_class_correct.to_csv(kNN_class_correct_path, index=False) #binary classifications (1 = correct)
-        kNN_rate = kNN_class_correct.mean() #calculate the correct classification rate for each feature
-        kNN_rate = kNN_rate.reset_index()
-        kNN_rate.columns = ['Building_Feature', 'Correct_Rate']
-        kNN_rate = kNN_rate.iloc[2:, :].reset_index(drop=True)
-        print("correct rate:")
-        print(kNN_rate)
-        kNN_rate_correct = "/".join([output_files_path, "kNN_test_rate.csv"])
-        kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate
-
-    def DecisionTrees(self, building_params, output_files_path, feature_vector, job_id, simjob_str): 
-        # create output file path if needed 
-        Path(output_files_path).mkdir(parents=True, exist_ok=True)
-
-        # multiple decision trees
-        # split the data - 80/20 train/test split
-        X_train, X_test, y_train, y_test = train_test_split(feature_vector, building_params,random_state=203,test_size=0.2,shuffle=True)
-        print("Building params:")
-        print(building_params)
-        y_test = y_test.reset_index(inplace=False)
-        list_features = list(building_params.columns)
-        list_features.remove('Job_ID') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
-        list_features.remove('index') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
-        list_features.remove('#') #tree was overfitting to Job ID - each leaf is one ID, making it take too long
-        print("List Features:")
-        print(list_features) #check that it's only the features we want
-        
-        #create empty dataframes before for loop
-        multi_class_correct = pd.DataFrame(columns=list_features)
-        multi_class_test_preds = pd.DataFrame(columns=list_features)
-        multi_class_test_preds["ID"] = y_test.Job_ID.unique()
-        multi_class_correct["ID"] = y_test.Job_ID.unique()
-        #create column with actual building IDs
-        #set hyperparameters for tuning each decision tree
-        max_depth_range = [4,5,6,7,8,9,10,11,12,15,20,30,40,50,70,90,120,150]
-        sample_split_range = list(range(2, 50))
-        leaf_range = list(range(1,40))
-        tree_param = [{'criterion': ['gini'], 'max_depth': max_depth_range, 'splitter': ['random','best']},
-                    {'min_samples_split': sample_split_range, 'min_samples_leaf': leaf_range}]
-        
-        #this for loop saves the results after each feature in case running the code times out and the script fails
-        for feature in list_features:
-            print(feature)
-            clf = GridSearchCV(DecisionTreeClassifier(), tree_param, cv=2, scoring='accuracy') #hyperparameter tuning 
-            clf_feature = clf.fit(X_train, y_train["{}".format(feature)]) #create a decision tree for each building feature
-            print(clf_feature.best_estimator_)
-            y_predicted = clf_feature.predict(X_test)
-            print("y predicted")
-            print(feature)
-            print(y_predicted)
-
-            multi_class_correct[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
-            multi_class_test_preds[feature] = y_predicted #predictions on test set
-            # multi_correct_rate = multi_class_correct[feature].mean()
-
-            correct_path = f"{output_files_path}/multiple_trees_class_correct_features"
-            Path(correct_path).mkdir(parents=True, exist_ok=True)
-            multi_class_correct_path = f"{correct_path}/class_correct_{feature}.csv"
-            multi_class_correct[[feature]].to_csv(multi_class_correct_path, index=False)
-
-            # create separate folder to contain all the features 
-            test_preds_path = f"{output_files_path}/multiple_trees_test_preds_features"
-            Path(test_preds_path).mkdir(parents=True, exist_ok=True)
-            multi_class_test_preds_path = f"{test_preds_path}/test_preds_{feature}.csv"
-            multi_class_test_preds[[feature]].to_csv(multi_class_test_preds_path, index=False)
-
-            # create separate folder to contain all the features 
-            test_true_path = f"{output_files_path}/multiple_trees_test_true_features"
-            Path(test_true_path).mkdir(parents=True, exist_ok=True)
-            y_test_path = f"{test_true_path}/test_true_{feature}.csv"
-            y_test[[feature]].to_csv(y_test_path, index=False)
-
-            # create separate folder to contain all the features 
-            # test_rate_path = f"{output_files_path}/multiple_trees_test_rate_features"
-            # Path(test_rate_path).mkdir(parents=True, exist_ok=True)
-            # rate_test_path = f"{test_rate_path}/test_true_{feature}.csv"
-            # multi_correct_rate[[feature]].to_csv(rate_test_path, index=False)
-
-            print("saving results...(trees)")
-
-        multi_class_test_preds_path = "/".join([output_files_path, "multiple_trees_test_preds.csv"])
-        multi_class_test_preds.to_csv(multi_class_test_preds_path, index=False)
-        y_test_preds_path = "/".join([output_files_path, "multiple_trees_test_true.csv"])
-        y_test.to_csv(y_test_preds_path, index=False)
-        multi_class_correct_path = "/".join([output_files_path, "multiple_trees_class_correct.csv"])
-        multi_class_correct.to_csv(multi_class_correct_path, index=False) 
-
-        multiple_trees_rate_path = f"{output_files_path}/multiple_trees_test_rate_{feature}.csv"
-            
-        print("trees test results saved!")
-
-# #EUC testing 
-# meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example_IndividualFiles"
-# # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
-# sim_job = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/SimJobIndex_Example.csv"
-# output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Euc_Results_Class" 
-# actual_data = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
-
-# date_str = "01/01/2014"
-# sq_ft = 210887
-# J_conversion = 1 
-# bf = BuildingFeatures('Euc')
-# bf.process_alg(meter_files_dir, sim_job, date_str, output_files_path, actual_data, sq_ft, J_conversion)
-
-#KNN + Decision Tree Testing
+  
+# Testing
 meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv"
 # meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
 sim_job_file_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/SimJobIndexPrimary.csv"
-output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/run" 
+output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/Euc_BF_Updated" 
 df_actual_t = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
 actual_id = 'ID'
 actual_date = 'Date.Time'
@@ -594,6 +660,5 @@ meter_col_name = 'Electricity:Facility'
 date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 0 
-# bf = BuildingFeatures('DT')
-bf = BuildingFeatures('DT')
+bf = BuildingFeatures('KNN')
 bf.process_alg(meter_files_dir, meter_col_name, sim_job_file_path, date_str, output_files_path, sq_ft, J_conversion, df_actual_t, actual_id, actual_date)
