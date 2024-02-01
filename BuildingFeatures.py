@@ -94,19 +94,30 @@ class BuildingFeatures:
         self.alg = alg
     
     # process_alg takes the algorithm input and calls the appropriate method
-    def process_alg(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, output_files_path, sq_ft, J_conversion, actual_path, actual_id, actual_date):
+    def process_alg(self, **kwargs):
+        meter_file_path = kwargs.get('meter_file_path')
+        meter_col_name = kwargs.get('meter_col_name')
+        meter_date_str = kwargs.get('meter_date_str')
+        sim_job_file_path = kwargs.get('sim_job_file_path')
+        output_files_path = kwargs.get('output_files_path')
+        actual_path = kwargs.get('actual_path')
+        actual_id = kwargs.get('actual_id')
+        actual_date = kwargs.get('actual_date')
+        sq_ft = kwargs.get('sq_ft')
+        J_conversion = kwargs.get('J_conversion')
+
         if self.alg == 'Euc':
-            df_sim, simjob = self.format_simdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_sim, simjob = self.format_simdata(meter_file_path, meter_col_name, sim_job_file_path, meter_date_str, sq_ft, J_conversion)
             df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date) 
             self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
-            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, meter_date_str, sq_ft, J_conversion)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id)
             self.KNN(building_params, output_files_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
         elif self.alg == 'DT':
-            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion)
+            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, meter_date_str, sq_ft, J_conversion)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id)
             self.DecisionTrees(building_params, output_files_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
@@ -660,5 +671,16 @@ meter_col_name = 'Electricity:Facility'
 date_str = "01/01/2014"
 sq_ft = 210887
 J_conversion = 0 
-bf = BuildingFeatures('KNN')
-bf.process_alg(meter_files_dir, meter_col_name, sim_job_file_path, date_str, output_files_path, sq_ft, J_conversion, df_actual_t, actual_id, actual_date)
+bf = BuildingFeatures('Euc')
+bf.process_alg(
+    meter_file_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv",
+    meter_col_name = "Electricity:Facility",
+    meter_date_str = "01/01/2014",
+    sim_job_file_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/SimJobIndexPrimary.csv",
+    output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/Euc_BF_Updated",
+    actual_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv",
+    actual_id = "ID",
+    actual_date = "Date.Time",
+    sq_ft = 210887,
+    J_conversion = 0 
+)
