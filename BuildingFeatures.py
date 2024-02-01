@@ -45,7 +45,7 @@ def time_stats_2(group):
   new_grp['day'] = new_grp['date'].apply(lambda d: d.timetuple().tm_yday)
   return new_grp
 
-def feature_grp_meter_file(new_group):
+def feature_grp_meter_file(new_group, meter_col_name):
   grp_month = new_group[[meter_col_name,'month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
   numpy_month = grp_month[meter_col_name].to_numpy().flatten()
   grp_year = new_group[meter_col_name].agg(func = ['mean', 'min','max','median','std'])
@@ -55,7 +55,7 @@ def feature_grp_meter_file(new_group):
   final_array = np.concatenate((numpy_month, numpy_year, numpy_week))
   return final_array
 
-def feature_grp_meter_dir(new_group):
+def feature_grp_meter_dir(new_group, meter_col_name):
   grp_month = new_group[[meter_col_name,'month']].groupby('month').agg(func = ['mean', 'min','max','median','std'])
   numpy_month = grp_month[meter_col_name].to_numpy().flatten()
   grp_year = new_group[meter_col_name].agg(func = ['mean', 'min','max','median','std'])
@@ -97,7 +97,7 @@ class BuildingFeatures:
     def process_alg(self, **kwargs):
         meter_file_path = kwargs.get('meter_file_path')
         meter_col_name = kwargs.get('meter_col_name')
-        meter_date_str = kwargs.get('meter_date_str')
+        start_date = kwargs.get('start_date')
         sim_job_file_path = kwargs.get('sim_job_file_path')
         output_files_path = kwargs.get('output_files_path')
         actual_path = kwargs.get('actual_path')
@@ -107,17 +107,17 @@ class BuildingFeatures:
         J_conversion = kwargs.get('J_conversion')
 
         if self.alg == 'Euc':
-            df_sim, simjob = self.format_simdata(meter_file_path, meter_col_name, sim_job_file_path, meter_date_str, sq_ft, J_conversion)
-            df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date) 
+            df_sim, simjob = self.format_simdata(meter_file_path, meter_col_name, sim_job_file_path, start_date, sq_ft, J_conversion)
+            df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date, start_date) 
             self.Euclidean(df_sim, simjob, output_files_path, df_actual_t)
 
         elif self.alg == 'KNN':
-            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, meter_date_str, sq_ft, J_conversion)
+            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, start_date, sq_ft, J_conversion)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id)
             self.KNN(building_params, output_files_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
         elif self.alg == 'DT':
-            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, meter_date_str, sq_ft, J_conversion)
+            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_file_path, meter_col_name, sim_job_file_path, start_date, sq_ft, J_conversion)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id)
             self.DecisionTrees(building_params, output_files_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
@@ -432,10 +432,10 @@ class BuildingFeatures:
         mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
         print("trees validation results saved!")
 
-    def format_simdata(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion):
+    def format_simdata(self, meter_file_path, meter_col_name, sim_job_file_path, start_date, sq_ft, J_conversion):
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
-            start = pd.to_datetime(date_str)
+            start = pd.to_datetime(start_date)
             if start.is_leap_year:
                 hourly_periods = 8784 
             else: 
@@ -475,7 +475,7 @@ class BuildingFeatures:
         if os.path.isdir(meter_file_path):
             meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
-            start = pd.to_datetime(date_str)
+            start = pd.to_datetime(start_date)
             if start.is_leap_year:
                 hourly_periods = 8784 
             else: 
@@ -532,9 +532,9 @@ class BuildingFeatures:
         print("DF ACTUAL AFTER")
         return df_actual_after, actual_feature_after
     
-    def format_sim_actualdata(self, df_actual_path, actual_id, actual_date):
+    def format_sim_actualdata(self, df_actual_path, actual_id, actual_date, start_date):
         df_actual = pd.read_csv(df_actual_path)
-        start = pd.to_datetime(date_str) 
+        start = pd.to_datetime(start_date) 
         if start.is_leap_year:
                 hourly_periods = 8784 
         else: 
@@ -556,17 +556,16 @@ class BuildingFeatures:
         print(df_actual_t) 
         return df_actual_t
     
-    def format_MLdata(self, meter_file_path, meter_col_name, sim_job_file_path, date_str, sq_ft, J_conversion):
+    def format_MLdata(self, meter_file_path, meter_col_name, sim_job_file_path, start_date, sq_ft, J_conversion,):
         if os.path.isfile(meter_file_path):
             print("meter file inputed")
-            start = pd.to_datetime(date_str)
+            start = pd.to_datetime(start_date)
             if start.is_leap_year:
                 hourly_periods = 8784 
             else: 
                 hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df_sim = pd.read_csv(meter_file_path)
-            unique_ids = df[actual_id].unique()
             # df_sim = []
             # if J is accounted for - have the user input 0 for the J field 
             if J_conversion == 0: 
@@ -587,7 +586,7 @@ class BuildingFeatures:
             job_id = []
             for name, group in list(grouped_id):
                 final_group = time_stats_2(group)
-                feature_list.append(feature_grp_meter_file(final_group))
+                feature_list.append(feature_grp_meter_file(final_group, meter_col_name))
                 job_id.append(name)
                 feature_vector = np.array(feature_list)
             print("simulation data:")
@@ -597,7 +596,7 @@ class BuildingFeatures:
             meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
             # meter_files = glob.glob(os.path.join(meter_file_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
-            start = pd.to_datetime(date_str)
+            start = pd.to_datetime(start_date)
             if start.is_leap_year:
                 hourly_periods = 8784 
             else: 
@@ -638,7 +637,7 @@ class BuildingFeatures:
             job_id = []
             for name, group in list(grouped_id):
                 final_group = time_stats(group)
-                feature_list.append(feature_grp_meter_dir(final_group))
+                feature_list.append(feature_grp_meter_dir(final_group, meter_col_name))
                 job_id.append(name)
                 feature_vector = np.array(feature_list)
             print("simulation data:")
@@ -660,24 +659,13 @@ class BuildingFeatures:
         return df_sim, building_params, feature_vector, job_id, simjob_str
   
 # Testing
-meter_files_dir = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv"
-# meter_file = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Meters_Example.csv"
-sim_job_file_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/SimJobIndexPrimary.csv"
-output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/Euc_BF_Updated" 
-df_actual_t = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv"
-actual_id = 'ID'
-actual_date = 'Date.Time'
-meter_col_name = 'Electricity:Facility'
-date_str = "01/01/2014"
-sq_ft = 210887
-J_conversion = 0 
-bf = BuildingFeatures('Euc')
+bf = BuildingFeatures('DT')
 bf.process_alg(
     meter_file_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv",
     meter_col_name = "Electricity:Facility",
-    meter_date_str = "01/01/2014",
+    start_date = "01/01/2014",
     sim_job_file_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/SimJobIndexPrimary.csv",
-    output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/Euc_BF_Updated",
+    output_files_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/DT_BF_Updated",
     actual_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv",
     actual_id = "ID",
     actual_date = "Date.Time",
