@@ -25,8 +25,9 @@ from pathlib import Path
 from dateutil import parser
 
 def extract_datetime(date_str):
-  # date_str = correct_date_str(date_str)
-  date = datetime.strptime(date_str, ' %m/%d  %H:%M:%S')
+  # date = datetime.strptime(date_str, ' %m/%d  %H:%M:%S')
+  date_str1 = date_str1.replace(' 24:00:00', ' 00:00:00')
+  date = parser.parse(date_str1)
   return date #.replace(year=2014)
 
 def time_stats(group):
@@ -115,12 +116,12 @@ class EAudit:
 
         elif self.alg == 'KNN':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
-            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
+            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date, start_date)
             self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_col, actual_date, actual_id)
 
         elif self.alg == 'DT':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
-            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
+            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date, start_date)
             self.DecisionTrees(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
         else: 
@@ -239,10 +240,12 @@ class EAudit:
         euc_dist_test_truth = euc_dist_test_truth.merge(simjob, on='Job_ID', how='left') #merge with building parameters
 
         output_test_preds_path = "/".join([output_path, "euc_dist_test_preds.csv"])
+        drop_col = ['#'] 
+        euc_dist_test_preds.drop(columns=drop_col, inplace=True)
         euc_dist_test_preds.to_csv(output_test_preds_path, index=False)
 
         output_test_truth_path = "/".join([output_path, "euc_dist_test_truth.csv"])
-        euc_dist_test_preds.to_csv(output_test_truth_path, index=False)
+        euc_dist_test_truth.to_csv(output_test_truth_path, index=False)
         print("saved test results")
 
         #compute Euclidean distance - validation, after
@@ -509,10 +512,11 @@ class EAudit:
         simjob_cols.remove(simjob_cols[0])
         return df_sim, simjob
 
-    def format_ML_actualdata(self, df_actual_path, actual_id, actual_col, actual_date):
+    def format_ML_actualdata(self, df_actual_path, actual_id, actual_col, actual_date, start_date):
         df_actual = pd.read_csv(df_actual_path)
         print("formatting actual data")
-        start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
+        # start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
+        start = pd.to_datetime(start_date)
         print(start)
         if start.is_leap_year:
                 hourly_periods = 8784 
@@ -548,7 +552,8 @@ class EAudit:
     
     def format_sim_actualdata(self, df_actual_path, actual_id, actual_date, actual_col, start_date):
         df_actual = pd.read_csv(df_actual_path)
-        start = pd.to_datetime(start_date) 
+        # start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
+        start = pd.to_datetime(start_date)
         if start.is_leap_year:
                 hourly_periods = 8784 
         else: 
@@ -673,7 +678,7 @@ class EAudit:
         return df_sim, building_params, feature_vector, job_id, simjob_str
   
 # Testing
-x = EAudit('KNN')
+x = EAudit('Euc')
 x.process_alg(
     meter_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv",
     meter_col = "Electricity:Facility",
@@ -685,5 +690,5 @@ x.process_alg(
     actual_col = "kWh_norm_sf",
     sq_ft = 210887,
     J_conv = 0, 
-    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/save/KNN_EA"
+    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/save/Euc_EA"
 )
