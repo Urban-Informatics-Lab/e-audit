@@ -188,7 +188,7 @@ class EAudit:
         kNN_rate = kNN_class_correct.mean() #calculate the correct classification rate for each feature
         kNN_rate = kNN_rate.reset_index()
         kNN_rate.columns = ['Building_Feature', 'Correct_Rate']
-        kNN_rate = kNN_rate.iloc[2:, :].reset_index(drop=True)
+        kNN_rate = kNN_rate.iloc[1:, :].reset_index(drop=True)
         print("correct rate:")
         print(kNN_rate)
         kNN_rate_correct = "/".join([output_path, "kNN_test_rate.csv"])
@@ -515,8 +515,8 @@ class EAudit:
     def format_ML_actualdata(self, df_actual_path, actual_id, actual_col, actual_date, start_date):
         df_actual = pd.read_csv(df_actual_path)
         print("formatting actual data")
-        # start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
-        start = pd.to_datetime(start_date)
+        start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
+        # start = pd.to_datetime(start_date)
         print(start)
         if start.is_leap_year:
                 hourly_periods = 8784 
@@ -552,8 +552,7 @@ class EAudit:
     
     def format_sim_actualdata(self, df_actual_path, actual_id, actual_date, actual_col, start_date):
         df_actual = pd.read_csv(df_actual_path)
-        # start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
-        start = pd.to_datetime(start_date)
+        start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
         if start.is_leap_year:
                 hourly_periods = 8784 
         else: 
@@ -678,7 +677,7 @@ class EAudit:
         return df_sim, building_params, feature_vector, job_id, simjob_str
   
 # Testing
-x = EAudit('Euc')
+x = EAudit('KNN')
 x.process_alg(
     meter_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv",
     meter_col = "Electricity:Facility",
@@ -690,5 +689,5 @@ x.process_alg(
     actual_col = "kWh_norm_sf",
     sq_ft = 210887,
     J_conv = 0, 
-    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/save/Euc_EA"
+    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/save/KNN_EA"
 )
