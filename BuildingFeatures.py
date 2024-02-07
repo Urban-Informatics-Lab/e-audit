@@ -22,6 +22,7 @@ import scipy
 from scipy import spatial 
 import os 
 from pathlib import Path  
+from dateutil import parser
 
 def extract_datetime(date_str):
   # date_str = correct_date_str(date_str)
@@ -75,7 +76,7 @@ def time_stats_actual(group1, actual_date):
 
 def extract_datetime_actual(date_str1):
     date_str1 = date_str1.replace(' 24:00:00', ' 00:00:00')
-    date1 = datetime.strptime(date_str1, ' %m/%d  %H:%M:%S')
+    date1 = parser.parse(date_str1)
     return date1
 
 def feature_grp_actual(new_group1, actual_col):
@@ -88,7 +89,7 @@ def feature_grp_actual(new_group1, actual_col):
   final_array1 = np.concatenate((numpy_month1, numpy_year1, numpy_week1))
   return final_array1
 
-class BuildingFeatures: 
+class EAudit: 
     def __init__(self, alg):
         # alg is a string that can be 'Euclidean' or 'KNN' or 'Decision Tree'
         self.alg = alg
@@ -115,7 +116,7 @@ class BuildingFeatures:
         elif self.alg == 'KNN':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
-            self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_col, actual_date)
+            self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_col, actual_date, actual_id)
 
         elif self.alg == 'DT':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
@@ -125,7 +126,7 @@ class BuildingFeatures:
         else: 
             print("Invalid Algorithm Input. Please provide 'Euc', 'KNN', or 'DT.'")
 
-    def KNN(self, building_params, output_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after, actual_col, actual_date):
+    def KNN(self, building_params, output_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after, actual_col, actual_date, actual_id):
         # create a new output files path if needed 
         Path(output_path).mkdir(parents=True, exist_ok=True)
         # # create a new index for merging purposes 
@@ -193,17 +194,8 @@ class BuildingFeatures:
         kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate
 
         # NEW VALIDATION PART! 
-        actual_feat = []
-        print(type(df_actual_after))
-        df_actual_after = pd.DataFrame(df_actual_after)
-        grouped_actual_after = df_actual_after.groupby('ID')
-        for name, group in list(grouped_actual_after): #create time series features
-            fin_actual = time_stats_actual(group, actual_date)
-        actual_feat.append(feature_grp_actual(fin_actual, actual_col))
-        actual_feature_after = np.array(actual_feat)
-
         kNN_preds_after = pd.DataFrame(columns=["ID","Job_ID"])
-        kNN_preds_after["ID"] = df_actual_after.ID.unique()
+        kNN_preds_after["ID"] = df_actual_after[actual_id].unique()
         kNN_preds_after["Job_ID"] = model.predict(actual_feature_after)
         kNN_preds_after_path = "/".join([output_path, "kNN_validation_preds_after.csv"])
         kNN_preds_after.to_csv(kNN_preds_after_path, index=False) #binary classifications (1 = correct)
@@ -518,20 +510,41 @@ class BuildingFeatures:
         return df_sim, simjob
 
     def format_ML_actualdata(self, df_actual_path, actual_id, actual_col, actual_date):
-        df_actual_after = pd.read_csv(df_actual_path)
-        print(df_actual_after)
+        df_actual = pd.read_csv(df_actual_path)
+        print("formatting actual data")
+        start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
+        print(start)
+        if start.is_leap_year:
+                hourly_periods = 8784 
+        else: 
+            hourly_periods = 8760
+        drange = pd.date_range(start, periods=hourly_periods, freq='H')
+        # change the index to be the length of the dataframe 
+        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
+        ids = df_actual[actual_id].unique()
+        i=0
+        for school_id in ids:
+            df = df_actual[df_actual[actual_id] == school_id]
+            date_range = df[actual_date]
+            df = df[[actual_col]].transpose()
+            df.columns = date_range.astype(str)
+            df['school_id'] = school_id
+            df_actual_t.iloc[i] = df.iloc[0]
+            i=i+1
         actual_feat = []
-        grouped_actual_after = df_actual_after.groupby(actual_id)
+        grouped_actual_after = df_actual.groupby(actual_id)
+        print("finished group by")
         for name, group in list(grouped_actual_after): #create time series features
             fin_actual = time_stats_actual(group, actual_date)
             actual_feat.append(feature_grp_actual(fin_actual, actual_col))
         actual_feature_after = np.array(actual_feat)
-        # df_actual_after = pd.DataFrame(df_actual_after)
-        print("actual data loaded")
-        print(df_actual_after.head)
-        print(type(df_actual_after))
+        print("actual feature after:")
+        print(actual_feature_after)
+        print("actual data: ")
+        print(df_actual.head)
+        print(type(df_actual))
         print("DF ACTUAL AFTER")
-        return df_actual_after, actual_feature_after
+        return df_actual, actual_feature_after
     
     def format_sim_actualdata(self, df_actual_path, actual_id, actual_date, actual_col, start_date):
         df_actual = pd.read_csv(df_actual_path)
@@ -660,8 +673,8 @@ class BuildingFeatures:
         return df_sim, building_params, feature_vector, job_id, simjob_str
   
 # Testing
-bf = BuildingFeatures('Euc')
-bf.process_alg(
+x = EAudit('KNN')
+x.process_alg(
     meter_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv",
     meter_col = "Electricity:Facility",
     start_date = "01/01/2014",
@@ -669,8 +682,8 @@ bf.process_alg(
     actual_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv",
     actual_id = "ID",
     actual_date = "Date.Time",
-    actual_col = "kWh_norm_sf", 
+    actual_col = "kWh_norm_sf",
     sq_ft = 210887,
     J_conv = 0, 
-    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/save/Euc_BF"
+    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/save/KNN_EA"
 )
