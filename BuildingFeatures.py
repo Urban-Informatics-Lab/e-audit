@@ -99,7 +99,7 @@ class EAudit:
     def process_alg(self, **kwargs):
         meter_path = kwargs.get('meter_path')
         meter_col = kwargs.get('meter_col')
-        start_date = kwargs.get('start_date')
+        meter_date = kwargs.get('meter_date')
         sim_job_path = kwargs.get('sim_job_path')
         output_path = kwargs.get('output_path')
         actual_path = kwargs.get('actual_path')
@@ -110,27 +110,27 @@ class EAudit:
         J_conv = kwargs.get('J_conv')
 
         if self.alg == 'Euc':
-            df_sim, simjob = self.format_simdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
+            df_sim, simjob = self.format_simdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
             df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date, actual_col) 
             self.Euclidean(df_sim, simjob, output_path, df_actual_t)
 
         elif self.alg == 'KNN':
-            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
+            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
             self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_col, actual_date, actual_id)
 
         elif self.alg == 'DT':
-            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
+            df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
             self.DecisionTrees(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
         else: 
             print("Invalid Algorithm Input. Please provide 'Euc', 'KNN', or 'DT.'")
 
-    def format_simdata(self, meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv):
+    def format_simdata(self, meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv):
         if os.path.isfile(meter_path):
             print("meter file inputed")
-            start = pd.to_datetime(start_date)
+            start = pd.to_datetime(meter_date)
             if start.is_leap_year:
                 hourly_periods = 8784 
             else: 
@@ -170,7 +170,7 @@ class EAudit:
         if os.path.isdir(meter_path):
             meter_files = glob.glob(os.path.join(meter_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
-            start = pd.to_datetime(start_date)
+            start = pd.to_datetime(meter_date)
             if start.is_leap_year:
                 hourly_periods = 8784 
             else: 
@@ -272,10 +272,10 @@ class EAudit:
         print(df_actual_t) 
         return df_actual_t
     
-    def format_MLdata(self, meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv,):
+    def format_MLdata(self, meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv,):
         if os.path.isfile(meter_path):
             print("meter file inputed")
-            start = pd.to_datetime(start_date)
+            start = pd.to_datetime(meter_date)
             if start.is_leap_year:
                 hourly_periods = 8784 
             else: 
@@ -310,7 +310,7 @@ class EAudit:
         if os.path.isdir(meter_path):
             meter_files = glob.glob(os.path.join(meter_path, "*.csv"))
             #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
-            start = pd.to_datetime(start_date)
+            start = pd.to_datetime(meter_date)
             if start.is_leap_year:
                 hourly_periods = 8784 
             else: 
@@ -659,11 +659,11 @@ class EAudit:
         print("trees validation results saved!")
   
 # Testing
-x = EAudit('DT')
-x.process_alg(
+bf = EAudit('Euc')
+bf.process_alg(
     meter_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv",
     meter_col = "Electricity:Facility",
-    start_date = "01/01/2014",
+    meter_date = "01/01/2014",
     sim_job_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/SimJobIndexPrimary.csv",
     actual_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/actual_after_2017_325schools.csv",
     actual_id = "char_prem_id",
@@ -671,5 +671,5 @@ x.process_alg(
     actual_col = "kWh_norm_sf",
     sq_ft = 210887,
     J_conv = 0, 
-    output_path = "/Users/dipashreyasur/Desktop/Output_Files/DT"
+    output_path = "/Users/dipashreyasur/Desktop/Output_Files/Euc"
 )
