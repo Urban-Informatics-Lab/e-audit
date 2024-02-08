@@ -1,16 +1,19 @@
-# building-features
-# **Building Feature Classification via Load Matching on Simulated Building Database**
+# e-audit
+# A "No-Touch" Energy Audit that Integrates Machine Learning and Simulation
+## Building Feature Classification via Load Matching on Simulated Building Database
 
-This package allows a user to perform building feature classification using load matching on a building's electricity load data. One year's worth of hourly electricity readings are matched to a simulated database of similar buildings to predict the energy performance of building features (i.e., window U-factor, roof insulation, plug loads, equipment schedules, etc.). This can be used to determine the non-geometric characteristics of a building or a group of buildings for which these features are unknown, or to audit the energy performance of specific features over time. 
+This Python package was created to implement the methodology proposed in "E-Audit: A "No-Touch" Energy Audit that Integrates Machine Learning and Simulation" by Excell, Andrews, and Jain. 
+
+This package allows a user to evaluate the performance of building features using load matching on a building's electricity load data. One year's worth of hourly electricity readings are matched to a simulated database of similar buildings to predict the energy performance and physical characteristics of building features (i.e., window U-factor, roof insulation, plug loads, equipment schedules, etc.). This can be used to determine the non-geometric characteristics of a building or a group of buildings for which these features are unknown, or to audit the energy performance of specific features over time. 
 
 ## Creating the simulated database
 Before running the classification functions, the first step requires creating a simulated database of scenarios. This is done by creating a building energy model, "tagging" the building parameters that you're interested in evaluating, and simulating various values for those parameters. The following instructions explain how to do this in EnergyPlus, using the parametric simulation tool 'jEPlus'.
 
 First, you need to determine which building use type and which climate zone you are interested in. The building use type can be user-defined (by creating a new building energy model in EnergyPlus), or it can be one of the DOE reference building types (https://www.energycodes.gov/prototype-building-models). The climate zone is used to determine the typical weather file (TMY) for that region; if more geographically-specific weather data is available, this should be used instead of a TMY file. EnergyPlus provides TMY files for locations around the globe: https://energyplus.net/weather. 
 
-The next step is to select building parameters which you are interested in assessing to define the parametric scenarios. For example, a lighting retrofit would require changing the lighting power density. The EnergyPlus IDF file (*.idf) needs to be "tagged" with the parameters that you will be varying. To do this, replace the existing value with a descriptive name tag, such as "@@lighting@@" for the lighting power density. In a csv file, record the name of the tag along with the potential values that this parameter should take. An example "tagged" IDF file and parameter csv file have been provided with the example data. 
+The next step is to select building parameters which you are interested in evaluating. These features define the parametric scenarios. For example, a lighting retrofit would require changing the lighting power density. The EnergyPlus IDF file (*.idf) needs to be "tagged" with the parameters that you will be varying. To do this, replace the existing value with a descriptive name tag, such as "@@lighting@@" for the lighting power density. In a csv file, record the name of the tag along with the potential values that this parameter should take. An example "tagged" IDF file and parameter csv file have been provided with the example data (/Sample data/Modeling inputs). 
 
-This modified IDF file, the typical weather data, and the parameter csv are the inputs you'll need to run jEPlus. You will need to specify which results to collect: the output that you want is the **hourly electricity data for the entire facility** in a *csv format*. This can be done by defining result collection/post-processing in jEPlus using an *.mvi and/or *.rvi file - examples are provided with the example data. You'll need to download and install both EnergyPlus and jEPlus to run the simulations. jEPlus can be run from the command line or by using a graphical user interface (GUI). See the jEPlus website for more information on how to run the parameteric simulation (http://www.jeplus.org/wiki/doku.php). An example simulation output created using the example inputs has been provided with the sample data. 
+This modified IDF file, the typical weather data, and the parameter csv are the inputs you'll need to run jEPlus. You will need to specify which results to collect: the output used for this package is the **hourly electricity data for the entire facility** in a *csv format*. This can be done by defining result collection/post-processing in jEPlus using an *.mvi and/or *.rvi file - examples are provided with the example data. You'll need to download and install both EnergyPlus and jEPlus to run the simulations. jEPlus can be run from the command line or by using a graphical user interface (GUI). See the jEPlus website for more information on how to run the parameteric simulation (http://www.jeplus.org/wiki/doku.php). An example simulation output created using the example inputs has been provided with the sample data. 
 
 ## Running the classification functions
 To run the classification step, the simulation output for hourly electricity data should be in csv format, with one csv for each parametric scenario. These csvs should all be in one folder: you will need to provide the filepath to the function. You will also need the csv file that specifies which parameters were used to simulate each scenario; in jEPlus, this file is typically called "SimJobIndex.csv". 
@@ -20,7 +23,7 @@ There are three classification algorithms included in this package: Euclidean di
 The classification functions can take the electricity load profile from a building or a group of buildings and provide a predicted classification for each building parameter that was defined by the simulated database. 
 
 ## Usage
-After importing the package, create an instance of the BuildingFeatures class. The BuildingFeatures class has a constructor that takes in the algorithm type as a parameter. For the algorithm type parameter, input ‘KNN’ for k-nearest neighbors, ‘DT’ for decision trees, or ‘Euc’ for Euclidean. 
+After importing the package, create an instance of the EAudit class. The EAudit class has a constructor that takes in the algorithm type as a parameter. For the algorithm type parameter, input ‘KNN’ for k-nearest neighbors, ‘DT’ for decision trees, or ‘Euc’ for Euclidean. 
 
 Next, use the `process_alg()` method to generate the building feature classification from the building electricity load data. 
 
@@ -37,11 +40,11 @@ process_alg() takes in the following parameters:
 - Output files - file path (*str*) 
 
 ## Example 
-Let's create `bf` as an instance of the BuildingFeatures class to run the k-nearest neighbors algorithm. 
+Let's create `bf` as an instance of the EAudit class to run the k-nearest neighbors algorithm. 
 
-    bf = BuildingFeatures('KNN')
+    ea = EAudit('KNN')
 
-    bf.process_alg(
+    ea.process_alg(
         meter_path = "/Path_to/Meters_Example_IndividualFiles", 
         meter_col = "Electricity:Facility", 
         meter_date = "MM/DD/YYYY", 
