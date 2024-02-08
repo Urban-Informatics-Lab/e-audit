@@ -111,28 +111,268 @@ class EAudit:
 
         if self.alg == 'Euc':
             df_sim, simjob = self.format_simdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
-            df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date, actual_col, start_date) 
+            df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date, actual_col) 
             self.Euclidean(df_sim, simjob, output_path, df_actual_t)
 
         elif self.alg == 'KNN':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
-            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date, start_date)
+            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
             self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_col, actual_date, actual_id)
 
         elif self.alg == 'DT':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv)
-            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date, start_date)
+            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
             self.DecisionTrees(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
 
         else: 
             print("Invalid Algorithm Input. Please provide 'Euc', 'KNN', or 'DT.'")
 
+    def format_simdata(self, meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv):
+        if os.path.isfile(meter_path):
+            print("meter file inputed")
+            start = pd.to_datetime(start_date)
+            if start.is_leap_year:
+                hourly_periods = 8784 
+            else: 
+                hourly_periods = 8760
+            drange = pd.date_range(start, periods=hourly_periods, freq='H')
+            df = pd.read_csv(meter_path)
+            unique_ids = df['Job_ID'].unique()
+            df_sim = pd.DataFrame(0., index=np.arange(len(unique_ids)), columns=drange.astype(str).tolist())#+['Job_ID'])
+            # if J is accounted for - have the user input 0 for the J field 
+            if J_conv == 0: 
+                pass
+            else:
+                # J conversion 
+                df[meter_col]=df[meter_col]/(3.6e+6) 
+            # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
+            if sq_ft == 0: 
+                df = df 
+            else: 
+                df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
+            # df = df.set_index([meter_col, 'Job_ID'])
+            i = 0 
+            # iterate through the unique Job IDs 
+            for job_id in unique_ids: 
+                # gather rows with the same Job ID 
+                df_job = df[df['Job_ID'] == job_id]
+                # extract the electricity data 
+                df_job = df_job[meter_col]
+                # set the columns to be the drange and row data to be the electricity data 
+                df_job = df_job.transpose()
+                df_job.columns = drange.astype(str)
+                # transfer the data from the rows to df_sim 
+                df_sim.iloc[i] = df_job 
+                i += 1 
+            # assign the unique Job_ID column to df_sim 
+            df_sim['Job_ID'] = unique_ids
+
+        if os.path.isdir(meter_path):
+            meter_files = glob.glob(os.path.join(meter_path, "*.csv"))
+            #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
+            start = pd.to_datetime(start_date)
+            if start.is_leap_year:
+                hourly_periods = 8784 
+            else: 
+                hourly_periods = 8760
+            drange = pd.date_range(start, periods=hourly_periods, freq='H')
+            df_sim = pd.DataFrame(0., index=np.arange(len(meter_files)), columns=drange.astype(str).tolist())#+['Job_ID'])
+            i=0
+            names = []
+            for f in meter_files:
+                # handle the name of the file input 
+                name = os.path.basename(f)
+                name = os.path.splitext(name)[0]
+                names.append(name)
+                df = pd.read_csv(f)
+                if J_conv == 0: 
+                    pass
+                else:
+                    # J conversion 
+                    df[meter_col]=df[meter_col]/(3.6e+6) 
+                # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
+                if sq_ft == 0: 
+                    df = df 
+                else: 
+                    df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
+                # extract only the electricity data we need 
+                df = df[meter_col]
+                # transform the data to the "wide" format 
+                df = df.transpose()
+                df.columns = drange.astype(str)
+                df_sim.iloc[i] = df
+                i=i+1
+            # assign df_sim to be each of the file names that contains the Job_ID 
+            df_sim['Job_ID'] = names 
+        
+        simjob = pd.read_csv(sim_job_path)
+        simjob = simjob.drop(columns = ['WeatherFile','ModelFile'])
+        simjob_cols = list(simjob.columns)
+        simjob_cols.remove(simjob_cols[0])
+        return df_sim, simjob     
+    
+    def format_ML_actualdata(self, df_actual_path, actual_id, actual_col, actual_date):
+        df_actual = pd.read_csv(df_actual_path)
+        start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
+        if start.is_leap_year:
+                hourly_periods = 8784 
+        else: 
+            hourly_periods = 8760
+        drange = pd.date_range(start, periods=hourly_periods, freq='H')
+        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
+        ids = df_actual[actual_id].unique()
+        i=0
+        for school_id in ids:
+            df = df_actual[df_actual[actual_id] == school_id]
+            date_range = df[actual_date]
+            df = df[[actual_col]].transpose()
+            df.columns = date_range.astype(str)
+            df['school_id'] = school_id
+            df_actual_t.iloc[i] = df.iloc[0]
+            i=i+1
+        print(df_actual)
+        actual_feat = []
+        grouped_actual_after = df_actual.groupby(actual_id)
+        # for name, group in grouped_actual_after:
+        #     print(name)
+        #     print(group)
+        print(list(grouped_actual_after))
+        for name, group in list(grouped_actual_after): #create time series features
+            fin_actual = time_stats_actual(group, actual_date)
+            actual_feat.append(feature_grp_actual(fin_actual, actual_col))
+        actual_feature_after = np.array(actual_feat)
+        print("actual feature after", actual_feature_after)
+        df_actual_after = pd.DataFrame(df_actual)
+        print("actual data loaded")
+        print(df_actual_after.head)
+        print(type(df_actual_after))
+        print("DF ACTUAL AFTER")
+        return df_actual_after, actual_feature_after
+    
+    def format_sim_actualdata(self, df_actual_path, actual_id, actual_date, actual_col):
+        df_actual = pd.read_csv(df_actual_path)
+        start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
+        if start.is_leap_year:
+                hourly_periods = 8784 
+        else: 
+            hourly_periods = 8760
+        drange = pd.date_range(start, periods=hourly_periods, freq='H')
+        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
+        ids = df_actual[actual_id].unique()
+        i=0
+        for school_id in ids:
+            df = df_actual[df_actual[actual_id] == school_id]
+            date_range = df[actual_date]
+            df = df[[actual_col]].transpose()
+            df.columns = date_range.astype(str)
+            df['school_id'] = school_id
+            df_actual_t.iloc[i] = df.iloc[0]
+            i=i+1
+        print("Actual data: ")
+        print(df_actual_t) 
+        return df_actual_t
+    
+    def format_MLdata(self, meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv,):
+        if os.path.isfile(meter_path):
+            print("meter file inputed")
+            start = pd.to_datetime(start_date)
+            if start.is_leap_year:
+                hourly_periods = 8784 
+            else: 
+                hourly_periods = 8760
+            drange = pd.date_range(start, periods=hourly_periods, freq='H')
+            df_sim = pd.read_csv(meter_path)
+            # df_sim = []
+            # if J is accounted for - have the user input 0 for the J field 
+            if J_conv == 0: 
+                pass
+            else:
+                # J conversion 
+                df_sim[meter_col]=df_sim[meter_col]/(3.6e+6) 
+            # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
+            if sq_ft == 0: 
+                df_sim = df_sim 
+            else: 
+                df_sim[meter_col]=df_sim[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
+            print("DF Sim: ")
+            print(df_sim)
+            #create time series features for each Job ID 
+            grouped_id = df_sim.groupby('Job_ID')
+            feature_list = []
+            job_id = []
+            for name, group in list(grouped_id):
+                final_group = time_stats_2(group)
+                feature_list.append(feature_grp_meter_file(final_group, meter_col))
+                job_id.append(name)
+                feature_vector = np.array(feature_list)
+            print("simulation data:")
+            print(df_sim.head) 
+        if os.path.isdir(meter_path):
+            meter_files = glob.glob(os.path.join(meter_path, "*.csv"))
+            #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
+            start = pd.to_datetime(start_date)
+            if start.is_leap_year:
+                hourly_periods = 8784 
+            else: 
+                hourly_periods = 8760
+            drange = pd.date_range(start, periods=hourly_periods, freq='H')
+            df_sim = []
+            i=0
+            names = []
+            for f in meter_files:
+                # handle the name of the file input 
+                name = os.path.basename(f)
+                name = os.path.splitext(name)[0] 
+                names.append(name)
+                df = pd.read_csv(f)
+                df['Job_ID'] = name
+                df['Date/Time']=drange
+                # J conversion 
+                if J_conv == 0: 
+                    pass
+                else:
+        
+                    df[meter_col]=df[meter_col]/(3.6e+6) 
+                # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
+                if sq_ft == 0: 
+                    df = df 
+                else: 
+                    df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
+                df_sim.append(df)
+            print("DF SIM: ")
+            print(type(df_sim))
+            # assign df_sim to be each of the file names that contains the Job_ID 
+            df_sim=pd.concat(df_sim)
+            print("DF Sim: ")
+            print(df_sim)
+            # create time series features for each Job ID 
+            grouped_id = df_sim.groupby('Job_ID')
+            feature_list = []
+            job_id = []
+            for name, group in list(grouped_id):
+                final_group = time_stats(group)
+                feature_list.append(feature_grp_meter_dir(final_group, meter_col))
+                job_id.append(name)
+                feature_vector = np.array(feature_list)
+            print("simulation data:")
+            print(df_sim.head)
+        
+        simjob = pd.read_csv(sim_job_path)
+        simjob = simjob.drop(columns = ['WeatherFile','ModelFile'])
+        simjob_str = simjob.astype(str) 
+        simjob_str.index = np.arange(1, len(simjob_str)+1)
+        building_params = simjob_str.reset_index()
+        print("Sim Job_Str:")
+        print(simjob_str)
+        building_params = simjob_str
+
+        # create a new index for merging purposes 
+        building_params.index = np.arange(1, len(building_params)+1)
+        building_params = building_params.reset_index()
+        return df_sim, building_params, feature_vector, job_id, simjob_str
+    
     def KNN(self, building_params, output_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after, actual_col, actual_date, actual_id):
-        # create a new output files path if needed 
         Path(output_path).mkdir(parents=True, exist_ok=True)
-        # # create a new index for merging purposes 
-        # building_params.index = np.arange(1, len(building_params)+1)
-        # building_params = building_params.reset_index()
         # kNN classifying
         le = preprocessing.LabelEncoder()
         label=le.fit_transform(job_id)
@@ -152,14 +392,11 @@ class EAudit:
         truth = pd.merge(truth, building_params, left_on="Job_ID", right_on="#")
         preds = preds.rename(columns={'Job_ID_x': 'Job_ID'})
         truth = truth.rename(columns={'Job_ID_x': 'Job_ID'})
-
         print("Preds columns", preds.columns)
         print("Truth columns", truth.columns)
-
         drop_col = ['Job_ID_y', 'index', '#'] 
         truth.drop(columns=drop_col, inplace=True)
         preds.drop(columns=drop_col, inplace=True)
-
         print("Preds:")
         print(preds)
         print("Truth:")
@@ -194,12 +431,17 @@ class EAudit:
         kNN_rate_correct = "/".join([output_path, "kNN_test_rate.csv"])
         kNN_rate.to_csv(kNN_rate_correct, index=False) #correct classification rate
 
-        # NEW VALIDATION PART! 
-        kNN_preds_after = pd.DataFrame(columns=["ID","Job_ID"])
-        kNN_preds_after["ID"] = df_actual_after[actual_id].unique()
-        kNN_preds_after["Job_ID"] = model.predict(actual_feature_after)
-        kNN_preds_after_path = "/".join([output_path, "kNN_validation_preds_after.csv"])
+        # validation  
+        kNN_preds_after = pd.DataFrame(columns=[actual_id,"Prediction_ID"])
+        kNN_preds_after[actual_id] = df_actual_after[actual_id].unique()
+        kNN_preds_after["Prediction_ID"] = model.predict(actual_feature_after)
+        kNN_preds_after_path = "/".join([output_path, "kNN_validation_preds.csv"])
         kNN_preds_after.to_csv(kNN_preds_after_path, index=False) #binary classifications (1 = correct)
+
+        y_train_path = "/".join([output_path, "kNN_train_IDs.csv"])
+        np.savetxt(y_train_path, y_train, delimiter=',', fmt='%s', header='Train_ID', comments='')
+        y_test_path = "/".join([output_path, "kNN_test_IDs.csv"])
+        np.savetxt(y_test_path, y_test, delimiter=',', fmt='%s', header='Test_ID', comments='')
 
     def Euclidean(self, df_sim, simjob, output_path, df_actual_t):
         print("DF sim loaded: ")
@@ -298,6 +540,7 @@ class EAudit:
         correct_rate.columns = ['Building_Feature', 'Correct_Rate']
         correct_rate = correct_rate.iloc[1: , :]
         correct_rate.to_csv(correct_rate_path, index=False)
+
     
     def DecisionTrees(self, building_params, output_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after): 
        # create output file path if needed 
@@ -354,46 +597,36 @@ class EAudit:
             multi_class_correct[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
             multi_class_test_preds[feature] = y_predicted #predictions on test set
 
-            #  multi_class_correct_rate[feature] =  np.array(y_predicted == y_test[feature], dtype=int) #binary classifications (1 = correct)
             mult_drop_id = multi_class_correct.drop(columns='Job_ID')
             multi_class_correct_rate = mult_drop_id.mean() 
 
             correct_rates.append(multi_class_correct_rate[feature])
             building_features_list.append(feature)
 
-            # multi_class_correct_rate['Building Feature'] = multi_class_correct_rate.index
-            # multi_class_correct_rate = multi_class_correct_rate.reset_index(inplace=True)
-
-            # mult_tree_preds_after["ID"] = df_actual_after.ID.unique()
             mult_tree_preds_after[feature] = clf_feature.predict(actual_feature_after) #predictions on post-retrofit data
             print("mult tree preds after: ", mult_tree_preds_after)
-            # multi_class_correct_rate["ID"] = y_test.Job_ID.unique()
-            # multi_correct_rate = multi_class_correct[feature].mean()
 
+            # create separate folders to contain all the features 
             correct_path = f"{output_path}/multiple_trees_class_correct_features"
             Path(correct_path).mkdir(parents=True, exist_ok=True)
             multi_class_correct_path = f"{correct_path}/class_correct_{feature}.csv"
             multi_class_correct[[feature]].to_csv(multi_class_correct_path, index=False)
 
-            # create separate folder to contain all the features 
             test_preds_path = f"{output_path}/multiple_trees_test_preds_features"
             Path(test_preds_path).mkdir(parents=True, exist_ok=True)
             multi_class_test_preds_path = f"{test_preds_path}/test_preds_{feature}.csv"
             multi_class_test_preds[[feature]].to_csv(multi_class_test_preds_path, index=False)
 
-            # create separate folder to contain all the features 
             test_true_path = f"{output_path}/multiple_trees_test_true_features"
             Path(test_true_path).mkdir(parents=True, exist_ok=True)
             y_test_path = f"{test_true_path}/test_true_{feature}.csv"
             y_test[[feature]].to_csv(y_test_path, index=False)
 
-            # create separate folder to contain all the features 
             preds_validation = f"{output_path}/multiple_trees_preds_validation_features"
             Path(preds_validation).mkdir(parents=True, exist_ok=True)
             preds_validation_path = f"{preds_validation}/preds_validation_{feature}.csv"
             mult_tree_preds_after[[feature]].to_csv(preds_validation_path, index=False)
 
-            # create separate folder to contain all the features 
             test_rate_path = f"{output_path}/multiple_trees_test_rate_features"
             rate_test_path = f"{test_rate_path}/test_rate_{feature}.csv"
 
@@ -402,7 +635,6 @@ class EAudit:
                 'Correct_Rate': [multi_class_correct_rate[feature]],
                 'Building_Feature': [feature]
             }).to_csv(rate_test_path, index=False)
-            # multi_class_correct_rate[[feature]].to_csv(rate_test_path, index=False)
 
             print("saving results...(trees)")
 
@@ -417,277 +649,27 @@ class EAudit:
         y_test.to_csv(y_test_preds_path, index=False)
         multi_class_correct_path = "/".join([output_path, "multiple_trees_class_correct.csv"])
         multi_class_correct.to_csv(multi_class_correct_path, index=False) 
-
-
         multiple_trees_rate_path = f"{output_path}/multiple_trees_test_rate.csv"
         all_correct_rates_df.to_csv(multiple_trees_rate_path, index=False)
             
         print("trees test results saved!")
 
-        mult_tree_preds_after_path = "/".join([output_path, "multiple_trees_validation_preds_after.csv"])
+        mult_tree_preds_after_path = "/".join([output_path, "multiple_trees_validation_preds.csv"])
         mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
         print("trees validation results saved!")
-
-    def format_simdata(self, meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv):
-        if os.path.isfile(meter_path):
-            print("meter file inputed")
-            start = pd.to_datetime(start_date)
-            if start.is_leap_year:
-                hourly_periods = 8784 
-            else: 
-                hourly_periods = 8760
-            drange = pd.date_range(start, periods=hourly_periods, freq='H')
-            df = pd.read_csv(meter_path)
-            unique_ids = df['Job_ID'].unique()
-            df_sim = pd.DataFrame(0., index=np.arange(len(unique_ids)), columns=drange.astype(str).tolist())#+['Job_ID'])
-            # if J is accounted for - have the user input 0 for the J field 
-            if J_conv == 0: 
-                pass
-            else:
-                # J conversion 
-                df[meter_col]=df[meter_col]/(3.6e+6) 
-            # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
-            if sq_ft == 0: 
-                df = df 
-            else: 
-                df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
-            # df = df.set_index([meter_col, 'Job_ID'])
-            i = 0 
-            # iterate through the unique Job IDs 
-            for job_id in unique_ids: 
-                # gather rows with the same Job ID 
-                df_job = df[df['Job_ID'] == job_id]
-                # extract the electricity data 
-                df_job = df_job[meter_col]
-                # set the columns to be the drange and row data to be the electricity data 
-                df_job = df_job.transpose()
-                df_job.columns = drange.astype(str)
-                # transfer the data from the rows to df_sim 
-                df_sim.iloc[i] = df_job 
-                i += 1 
-            # assign the unique Job_ID column to df_sim 
-            df_sim['Job_ID'] = unique_ids
-
-        if os.path.isdir(meter_path):
-            meter_files = glob.glob(os.path.join(meter_path, "*.csv"))
-            #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
-            start = pd.to_datetime(start_date)
-            if start.is_leap_year:
-                hourly_periods = 8784 
-            else: 
-                hourly_periods = 8760
-            drange = pd.date_range(start, periods=hourly_periods, freq='H')
-            df_sim = pd.DataFrame(0., index=np.arange(len(meter_files)), columns=drange.astype(str).tolist())#+['Job_ID'])
-            i=0
-            names = []
-            for f in meter_files:
-                # handle the name of the file input 
-                name = os.path.basename(f)
-                name = os.path.splitext(name)[0]
-                names.append(name)
-                df = pd.read_csv(f)
-                if J_conv == 0: 
-                    pass
-                else:
-                    # J conversion 
-                    df[meter_col]=df[meter_col]/(3.6e+6) 
-                # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
-                if sq_ft == 0: 
-                    df = df 
-                else: 
-                    df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
-                # extract only the electricity data we need 
-                df = df[meter_col]
-                # transform the data to the "wide" format 
-                df = df.transpose()
-                df.columns = drange.astype(str)
-                df_sim.iloc[i] = df
-                i=i+1
-            # assign df_sim to be each of the file names that contains the Job_ID 
-            df_sim['Job_ID'] = names 
-        
-        simjob = pd.read_csv(sim_job_path)
-        simjob = simjob.drop(columns = ['WeatherFile','ModelFile'])
-        simjob_cols = list(simjob.columns)
-        simjob_cols.remove(simjob_cols[0])
-        return df_sim, simjob
-
-    def format_ML_actualdata(self, df_actual_path, actual_id, actual_col, actual_date, start_date):
-        df_actual = pd.read_csv(df_actual_path)
-        print("formatting actual data")
-        start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
-        # start = pd.to_datetime(start_date)
-        print(start)
-        if start.is_leap_year:
-                hourly_periods = 8784 
-        else: 
-            hourly_periods = 8760
-        drange = pd.date_range(start, periods=hourly_periods, freq='H')
-        # change the index to be the length of the dataframe 
-        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
-        ids = df_actual[actual_id].unique()
-        i=0
-        for school_id in ids:
-            df = df_actual[df_actual[actual_id] == school_id]
-            date_range = df[actual_date]
-            df = df[[actual_col]].transpose()
-            df.columns = date_range.astype(str)
-            df['school_id'] = school_id
-            df_actual_t.iloc[i] = df.iloc[0]
-            i=i+1
-        actual_feat = []
-        grouped_actual_after = df_actual.groupby(actual_id)
-        print("finished group by")
-        for name, group in list(grouped_actual_after): #create time series features
-            fin_actual = time_stats_actual(group, actual_date)
-            actual_feat.append(feature_grp_actual(fin_actual, actual_col))
-        actual_feature_after = np.array(actual_feat)
-        print("actual feature after:")
-        print(actual_feature_after)
-        print("actual data: ")
-        print(df_actual.head)
-        print(type(df_actual))
-        print("DF ACTUAL AFTER")
-        return df_actual, actual_feature_after
-    
-    def format_sim_actualdata(self, df_actual_path, actual_id, actual_date, actual_col, start_date):
-        df_actual = pd.read_csv(df_actual_path)
-        start = pd.to_datetime(df_actual[actual_date][0]) # access first date in column as start date 
-        if start.is_leap_year:
-                hourly_periods = 8784 
-        else: 
-            hourly_periods = 8760
-        drange = pd.date_range(start, periods=hourly_periods, freq='H')
-        # change the index to be the length of the dataframe 
-        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
-        ids = df_actual[actual_id].unique()
-        i=0
-        for school_id in ids:
-            df = df_actual[df_actual[actual_id] == school_id]
-            date_range = df[actual_date]
-            df = df[[actual_col]].transpose()
-            df.columns = date_range.astype(str)
-            df['school_id'] = school_id
-            df_actual_t.iloc[i] = df.iloc[0]
-            i=i+1
-        print("Actual data: ")
-        print(df_actual_t) 
-        return df_actual_t
-    
-    def format_MLdata(self, meter_path, meter_col, sim_job_path, start_date, sq_ft, J_conv,):
-        if os.path.isfile(meter_path):
-            print("meter file inputed")
-            start = pd.to_datetime(start_date)
-            if start.is_leap_year:
-                hourly_periods = 8784 
-            else: 
-                hourly_periods = 8760
-            drange = pd.date_range(start, periods=hourly_periods, freq='H')
-            df_sim = pd.read_csv(meter_path)
-            # df_sim = []
-            # if J is accounted for - have the user input 0 for the J field 
-            if J_conv == 0: 
-                pass
-            else:
-                # J conversion 
-                df_sim[meter_col]=df_sim[meter_col]/(3.6e+6) 
-            # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
-            if sq_ft == 0: 
-                df_sim = df_sim 
-            else: 
-                df_sim[meter_col]=df_sim[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
-            print("DF Sim: ")
-            print(df_sim)
-            #create time series features for each Job ID 
-            grouped_id = df_sim.groupby('Job_ID')
-            feature_list = []
-            job_id = []
-            for name, group in list(grouped_id):
-                final_group = time_stats_2(group)
-                feature_list.append(feature_grp_meter_file(final_group, meter_col))
-                job_id.append(name)
-                feature_vector = np.array(feature_list)
-            print("simulation data:")
-            print(df_sim.head) 
-        if os.path.isdir(meter_path):
-          
-            meter_files = glob.glob(os.path.join(meter_path, "*.csv"))
-            # meter_files = glob.glob(os.path.join(meter_path, "*.csv"))
-            #load simulation data, transform to "wide" format where each row is a simulation and columns are each hour of the year
-            start = pd.to_datetime(start_date)
-            if start.is_leap_year:
-                hourly_periods = 8784 
-            else: 
-                hourly_periods = 8760
-            drange = pd.date_range(start, periods=hourly_periods, freq='H')
-            df_sim = []
-            i=0
-            names = []
-            for f in meter_files:
-                # handle the name of the file input 
-                name = os.path.basename(f)
-                name = os.path.splitext(name)[0] 
-                names.append(name)
-                df = pd.read_csv(f)
-                df['Job_ID'] = name
-                df['Date/Time']=drange
-                # names.append(name)
-                if J_conv == 0: 
-                    pass
-                else:
-                    # J conversion 
-                    df[meter_col]=df[meter_col]/(3.6e+6) 
-                # if sq_ft is already accounted for - have the user input 0 for the sq_ft field 
-                if sq_ft == 0: 
-                    df = df 
-                else: 
-                    df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
-                df_sim.append(df)
-            print("DF SIM: ")
-            print(type(df_sim))
-            # # assign df_sim to be each of the file names that contains the Job_ID 
-            df_sim=pd.concat(df_sim)
-            print("DF Sim: ")
-            print(df_sim)
-            #create time series features for each Job ID 
-            grouped_id = df_sim.groupby('Job_ID')
-            feature_list = []
-            job_id = []
-            for name, group in list(grouped_id):
-                final_group = time_stats(group)
-                feature_list.append(feature_grp_meter_dir(final_group, meter_col))
-                job_id.append(name)
-                feature_vector = np.array(feature_list)
-            print("simulation data:")
-            print(df_sim.head)
-        
-        simjob = pd.read_csv(sim_job_path)
-        simjob = simjob.drop(columns = ['WeatherFile','ModelFile'])
-        simjob_str = simjob.astype(str) 
-        # simjob_cols = list(simjob.columns)
-        # simjob_cols.remove(simjob_cols[0])
-        simjob_str.index = np.arange(1, len(simjob_str)+1)
-        building_params = simjob_str.reset_index()
-        print("Sim Job_Str:")
-        print(simjob_str)
-        building_params = simjob_str
-        # create a new index for merging purposes 
-        building_params.index = np.arange(1, len(building_params)+1)
-        building_params = building_params.reset_index()
-        return df_sim, building_params, feature_vector, job_id, simjob_str
   
 # Testing
-x = EAudit('KNN')
+x = EAudit('DT')
 x.process_alg(
     meter_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/P3csv",
     meter_col = "Electricity:Facility",
     start_date = "01/01/2014",
     sim_job_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/SimJobIndexPrimary.csv",
-    actual_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/Sample Building Electricity Data.csv",
-    actual_id = "ID",
-    actual_date = "Date.Time",
+    actual_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/actual_after_2017_325schools.csv",
+    actual_id = "char_prem_id",
+    actual_date = "date_time",
     actual_col = "kWh_norm_sf",
     sq_ft = 210887,
     J_conv = 0, 
-    output_path = "/Users/dipashreyasur/Desktop/Autumn 2023/Classifying code/subset/save/KNN_EA"
+    output_path = "/Users/dipashreyasur/Desktop/Output_Files/DT"
 )
