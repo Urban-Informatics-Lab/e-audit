@@ -37,7 +37,7 @@ process_alg() takes in the following parameters:
 - Actual data - file path (*str*)
 - Actual data - building id (*str*)
 - Actual data - date column (*str*)
-- sq_ft (*int*) 
+- sq_ft (*int*) - square footage of simulated building
 - J_conversion (*int*) - 1 if conversion is needed from J to kWh, 0 if not 
 - Output files - file path (*str*) 
 
