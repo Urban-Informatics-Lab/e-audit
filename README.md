@@ -23,7 +23,7 @@ There are three classification algorithms included in this package: Euclidean di
 The classification functions can take the electricity load profile from a building or a group of buildings and provide a predicted classification for each building parameter that was defined by the simulated database. 
 
 ## Usage
-A requirements file has been provided with the packages used to run this code. To create a conda environment using this file, run `conda create --name <env_name> --file requirements.txt` in the terminal, inserting the name of your environment in place of `<env_name>`. This package runs on Python 3.8 or newer. 
+An environment YAML file has been provided with the packages used to run this code. To create a conda environment using this file, run `conda env create -n <env_name> -f environment.yaml` in the terminal, inserting the name of your environment in place of `<env_name>`. This package runs on Python 3.8 or newer. 
 
 After importing the package, create an instance of the EAudit class. The EAudit class has a constructor that takes in the algorithm type as a parameter. For the algorithm type parameter, input ‘KNN’ for k-nearest neighbors, ‘DT’ for decision trees, or ‘Euc’ for Euclidean. 
 
