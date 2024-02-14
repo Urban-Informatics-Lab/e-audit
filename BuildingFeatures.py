@@ -384,24 +384,27 @@ class EAudit:
         for feature in list_features:
             kNN_class_correct[feature] =  np.array(preds[feature] == truth[feature], dtype=int) 
         kNN_class_correct['Job_ID'] = preds['Job_ID']
-        kNN_class_correct_path = "/".join([output_path, "kNN_test_class_correct.csv"])
+        kNN_class_correct_path = "/".join([output_path, "kNN_class_correct.csv"])
         kNN_class_correct.to_csv(kNN_class_correct_path, index=False) 
         #calculate the correct classification rate for each feature
-        kNN_rate = kNN_class_correct.mean() #binary classifications (1 = correct)
+        kNN_rate = kNN_class_correct.mean(numeric_only=True) #binary classifications (1 = correct)
         kNN_rate = kNN_rate.reset_index()
         kNN_rate.columns = ['Building_Feature', 'Correct_Rate']
         kNN_rate = kNN_rate.iloc[1:, :].reset_index(drop=True)
         kNN_rate_correct = "/".join([output_path, "kNN_test_rate.csv"])
         kNN_rate.to_csv(kNN_rate_correct, index=False) 
         #validation  
-        kNN_preds_after = pd.DataFrame(columns=[actual_id,"Prediction_ID"])
+        kNN_preds_after = pd.DataFrame(columns=[actual_id,"Prediction"])
         kNN_preds_after[actual_id] = df_actual_after[actual_id].unique()
-        kNN_preds_after["Prediction_ID"] = model.predict(actual_feature_after)
-        kNN_preds_after_path = "/".join([output_path, "kNN_validation_preds.csv"])
+        kNN_preds_after["Prediction"] = model.predict(actual_feature_after)
+        kNN_preds_after_path = "/".join([output_path, "kNN_preds_validation.csv"])
         kNN_preds_after.to_csv(kNN_preds_after_path, index=False) #binary classifications (1 = correct)
-        y_train_path = "/".join([output_path, "kNN_train_IDs.csv"])
+        #file for train and test IDs
+        sub_path = f"{output_path}/KNN_train_test_IDs"
+        Path(sub_path).mkdir(parents=True, exist_ok=True)
+        y_train_path = "/".join([sub_path, "kNN_train_IDs.csv"])
         np.savetxt(y_train_path, y_train, delimiter=',', fmt='%s', header='Train_ID', comments='')
-        y_test_path = "/".join([output_path, "kNN_test_IDs.csv"])
+        y_test_path = "/".join([sub_path, "kNN_test_IDs.csv"])
         np.savetxt(y_test_path, y_test, delimiter=',', fmt='%s', header='Test_ID', comments='')
 
     def Euclidean(self, df_sim, simjob, output_path, df_actual_t):
@@ -433,7 +436,7 @@ class EAudit:
         drop_col = ['#'] 
         euc_dist_test_preds.drop(columns=drop_col, inplace=True)
         euc_dist_test_preds.to_csv(output_test_preds_path, index=False)
-        output_test_truth_path = "/".join([output_path, "euc_dist_test_truth.csv"])
+        output_test_truth_path = "/".join([output_path, "euc_dist_test_true.csv"])
         euc_dist_test_truth.to_csv(output_test_truth_path, index=False)
         #compute Euclidean distance - validation, after
         actual2 = df_actual_t.iloc[:, :8760]
@@ -445,13 +448,13 @@ class EAudit:
         euc_dist_after.columns = df_sim['Job_ID']
         euc_dist_after['Job_ID'] = euc_dist_after.apply(lambda x: x.idxmin(), axis=1)
         euc_dist_after['char_prem_id'] = df_actual_t['school_id'].tolist()
-        euc_dist_after_path = "/".join([output_path, "euc_dist_test_validation_mat.csv"])
+        euc_dist_after_path = "/".join([output_path, "euc_dist_test_mat_validation.csv"])
         euc_dist_after.to_csv(euc_dist_after_path, index=False)
         euc_dist_preds_after = euc_dist_after[["Job_ID"]]
         euc_dist_truth_after = euc_dist_after[["char_prem_id"]]
         euc_dist_preds_after_path = "/".join([output_path, "euc_dist_preds_validation.csv"])
         euc_dist_preds_after.to_csv(euc_dist_preds_after_path, index=False)
-        euc_dist_truth_after_path = "/".join([output_path, "euc_dist_truth_validation.csv"])
+        euc_dist_truth_after_path = "/".join([output_path, "euc_dist_test_true_validation.csv"])
         euc_dist_truth_after.to_csv(euc_dist_truth_after_path, index=False)
         preds = euc_dist_test_preds
         truth = euc_dist_test_truth
@@ -573,9 +576,21 @@ class EAudit:
         multiple_trees_rate_path = f"{output_path}/multiple_trees_test_rate.csv"
 
         all_correct_rates_df.to_csv(multiple_trees_rate_path, index=False)
-        mult_tree_preds_after_path = "/".join([output_path, "multiple_trees_validation_preds.csv"])
+        mult_tree_preds_after_path = "/".join([output_path, "multiple_trees_preds_validation.csv"])
         mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
 
+ea = EAudit('KNN')
+ea.process_alg(
+    meter_path = "/Users/dipashreyasur/Desktop/BF_run/Meters_Example.csv",
+    meter_col = "Electricity:Facility [J](Hourly)",
+    meter_date = "01/01/2014",
+    sim_job_path = "/Users/dipashreyasur/Desktop/BF_run/SimJobIndex_Example.csv",
+    actual_path = "/Users/dipashreyasur/Desktop/BF_run/Sample Building Electricity Data.csv",
+    actual_id = "ID",
+    actual_date = "Date.Time",
+    actual_col = "kWh_norm_sf",
+    sq_ft = 210887,
+    J_conv = 0, 
+    output_path = "/Users/dipashreyasur/Desktop/Output_Files/KNN"
+)
 
-
-  
