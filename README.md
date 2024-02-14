@@ -48,7 +48,7 @@ Let's create `ea` as an instance of the EAudit class to run the k-nearest neighb
 
     ea.process_alg(
         meter_path = "/Path_to/Meters_Example_IndividualFiles", 
-        meter_col = "Electricity:Facility", 
+        meter_col = "Electricity:Facility [J](Hourly)", 
         meter_date = "MM/DD/YYYY", 
         sim_job_path = "/Path_to/SimJobIndex_Example.csv", 
         actual_path = "/Path_to/Sample Building Electricity Data.csv", 
