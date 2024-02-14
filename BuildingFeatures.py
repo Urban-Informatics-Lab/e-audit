@@ -24,7 +24,7 @@ import os
 from pathlib import Path  
 from dateutil import parser
 
-def extract_datetime(date_str):
+def extract_datetime(date_str1):
   #date = datetime.strptime(date_str, ' %m/%d  %H:%M:%S')
   date_str1 = date_str1.replace(' 24:00:00', ' 00:00:00')
   date = parser.parse(date_str1)
