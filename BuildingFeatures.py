@@ -474,7 +474,7 @@ class EAudit:
             preds_str = preds[feature].astype(str)
             truth_str = truth[feature].astype(str)
             class_correct[feature] = (preds_str == truth_str).astype(int)
-        correct_rate = class_correct.mean()
+        correct_rate = class_correct.mean(numeric_only=True)
         correct_rate_path = "/".join([output_path, "euc_dist_test_rate.csv"])
         correct_rate = correct_rate.reset_index()
         correct_rate.columns = ['Building_Feature', 'Correct_Rate']
@@ -591,6 +591,5 @@ ea.process_alg(
     actual_col = "kWh_norm_sf",
     sq_ft = 210887,
     J_conv = 0, 
-    output_path = "/Users/dipashreyasur/Desktop/Output_Files/KNN"
+    output_path = "/Users/dipashreyasur/Desktop/Output_files/KNN"
 )
-
