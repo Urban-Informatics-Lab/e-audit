@@ -24,12 +24,13 @@ The classification functions can take the electricity load profile from a buildi
 
 ## Usage
 An environment YAML file has been provided with the packages used to run this code. To create a conda environment using this file, run `conda env create -n <env_name> -f environment.yaml` in the terminal, inserting the name of your environment in place of `<env_name>`. This package runs on Python 3.8 or newer. 
+*Note: the scikit-learn package may have an error when installing from the environment file. In this case, run `pip install scikit-learn` once the environment is activated*
 
 After importing the package, create an instance of the EAudit class. The EAudit class has a constructor that takes in the algorithm type as a parameter. For the algorithm type parameter, input ‘KNN’ for k-nearest neighbors, ‘DT’ for decision trees, or ‘Euc’ for Euclidean. 
 
 Next, use the `process_alg()` method to generate the building feature classification from the building electricity load data. 
 
-process_alg() takes in the following parameters: 
+`process_alg()` takes in the following parameters: 
 - Meter file(s) - file path (*str*)
 - Meter file(s) - electricity column (*str*)
 - Meter file(s) - Start Date - format “MM/DD/YYYY” (*str*)
@@ -40,6 +41,7 @@ process_alg() takes in the following parameters:
 - sq_ft (*int*) - square footage of simulated building
 - J_conversion (*int*) - 1 if conversion is needed from J to kWh, 0 if not 
 - Output files - file path (*str*) 
+- Plot results (*True or False*) 
 
 ## Example 
 Let's create `ea` as an instance of the EAudit class to run the k-nearest neighbors algorithm. 
@@ -58,6 +60,7 @@ Let's create `ea` as an instance of the EAudit class to run the k-nearest neighb
         sq_ft = 2000,
         J_conv = 0    
         output_path = "/Path_to/Output_files", 
+        plot = True
     )
 
 ## Tips 
