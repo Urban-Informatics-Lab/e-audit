@@ -61,7 +61,7 @@ Let's create `ea` as an instance of the EAudit class to run the k-nearest neighb
         sq_ft = 2000,
         J_conv = 0    
         output_path = "/Path_to/Output_files", 
-        plot = True
+        plot_results = True
     )
 
 ## Tips 
