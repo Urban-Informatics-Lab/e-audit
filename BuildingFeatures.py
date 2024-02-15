@@ -115,7 +115,7 @@ class EAudit:
         if self.alg == 'Euc':
             df_sim, simjob = self.format_simdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
             df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date, actual_col) 
-            self.Euclidean(df_sim, simjob, output_path, df_actual_t, plot_results)
+            self.Euclidean(df_sim, simjob, output_path, df_actual_t, actual_id, plot_results)
 
         elif self.alg == 'KNN':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
@@ -123,8 +123,8 @@ class EAudit:
             self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_id, plot_results)
         elif self.alg == 'DT':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
-            df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
-            self.DecisionTrees(building_params, output_path, feature_vector, df_actual_after, plot_results)
+            df_actual_after, actual_feature_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
+            self.DecisionTrees(building_params, output_path, feature_vector, df_actual_after, actual_feature_after, actual_id, plot_results)
 
         else: 
             print("Invalid Algorithm Input. Please provide 'Euc', 'KNN', or 'DT.'")
@@ -140,7 +140,7 @@ class EAudit:
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df = pd.read_csv(meter_path)
             unique_ids = df['Job_ID'].unique()
-            df_sim = pd.DataFrame(0., index=np.arange(len(unique_ids)), columns=drange.astype(str).tolist())#+['Job_ID'])
+            df_sim = pd.DataFrame(0., index=np.arange(len(unique_ids)), columns=drange.astype(str).tolist())
             #if J is accounted for - have the user input 0 for the J field 
             if J_conv == 0: 
                 pass
@@ -151,8 +151,8 @@ class EAudit:
             if sq_ft == 0: 
                 df = df 
             else: 
-                df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
-            #df = df.set_index([meter_col, 'Job_ID'])
+                df[meter_col]=df[meter_col]/ sq_ft 
+            
             i = 0 
             #iterate through the unique Job IDs 
             for job_id in unique_ids: 
@@ -196,7 +196,7 @@ class EAudit:
                 if sq_ft == 0: 
                     df = df 
                 else: 
-                    df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
+                    df[meter_col]=df[meter_col]/ sq_ft 
                 #extract only the electricity data we need 
                 df = df[meter_col]
                 #transform the data to the "wide" format 
@@ -221,15 +221,15 @@ class EAudit:
         else: 
             hourly_periods = 8760
         drange = pd.date_range(start, periods=hourly_periods, freq='H')
-        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
+        df_actual_t = pd.DataFrame(0., index=np.arange(len(df_actual[actual_id].unique())), columns=drange.astype(str).tolist()+[actual_id])
         ids = df_actual[actual_id].unique()
         i=0
-        for school_id in ids:
-            df = df_actual[df_actual[actual_id] == school_id]
+        for bldg_id in ids:
+            df = df_actual[df_actual[actual_id] == bldg_id]
             date_range = df[actual_date]
             df = df[[actual_col]].transpose()
             df.columns = date_range.astype(str)
-            df['school_id'] = school_id
+            df[actual_id] = bldg_id
             df_actual_t.iloc[i] = df.iloc[0]
             i=i+1
         actual_feat = []
@@ -249,15 +249,15 @@ class EAudit:
         else: 
             hourly_periods = 8760
         drange = pd.date_range(start, periods=hourly_periods, freq='H')
-        df_actual_t = pd.DataFrame(0., index=np.arange(325), columns=drange.astype(str).tolist()+['school_id'])
+        df_actual_t = pd.DataFrame(0., index=np.arange(len(df_actual[actual_id].unique())), columns=drange.astype(str).tolist()+[actual_id])
         ids = df_actual[actual_id].unique()
         i=0
-        for school_id in ids:
-            df = df_actual[df_actual[actual_id] == school_id]
+        for bldg_id in ids:
+            df = df_actual[df_actual[actual_id] == bldg_id]
             date_range = df[actual_date]
             df = df[[actual_col]].transpose()
             df.columns = date_range.astype(str)
-            df['school_id'] = school_id
+            df[actual_id] = bldg_id
             df_actual_t.iloc[i] = df.iloc[0]
             i=i+1
         return df_actual_t
@@ -271,7 +271,7 @@ class EAudit:
                 hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
             df_sim = pd.read_csv(meter_path)
-            #df_sim = []
+            
             #if J is accounted for - have the user input 0 for the J field 
             if J_conv == 0: 
                 pass
@@ -282,7 +282,7 @@ class EAudit:
             if sq_ft == 0: 
                 df_sim = df_sim 
             else: 
-                df_sim[meter_col]=df_sim[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
+                df_sim[meter_col]=df_sim[meter_col]/ sq_ft 
             #create time series features for each Job ID 
             grouped_id = df_sim.groupby('Job_ID')
             feature_list = []
@@ -322,7 +322,7 @@ class EAudit:
                 if sq_ft == 0: 
                     df = df 
                 else: 
-                    df[meter_col]=df[meter_col]/ sq_ft #secondary SF = 210887, primary = 73959
+                    df[meter_col]=df[meter_col]/ sq_ft 
                 df_sim.append(df)
             #assign df_sim to be each of the file names that contains the Job_ID 
             df_sim=pd.concat(df_sim)
@@ -387,7 +387,7 @@ class EAudit:
         for feature in list_features:
             kNN_class_correct[feature] =  np.array(preds[feature] == truth[feature], dtype=int) 
         kNN_class_correct['Job_ID'] = preds['Job_ID']
-        kNN_class_correct_path = "/".join([output_path, "kNN_class_correct.csv"])
+        kNN_class_correct_path = "/".join([output_path, "kNN_test_class_correct.csv"])
         kNN_class_correct.to_csv(kNN_class_correct_path, index=False) 
         #calculate the correct classification rate for each feature
         kNN_rate = kNN_class_correct.mean(numeric_only=True) #binary classifications (1 = correct)
@@ -395,11 +395,15 @@ class EAudit:
         kNN_rate.columns = ['Building_Feature', 'Correct_Rate']
         kNN_rate_correct = "/".join([output_path, "kNN_test_rate.csv"])
         kNN_rate.to_csv(kNN_rate_correct, index=False) 
-        #validation  
-        kNN_preds_after = pd.DataFrame(columns=[actual_id,"Prediction"])
+        #user's building predictions  
+        kNN_preds_after = pd.DataFrame(columns=[actual_id,"Prediction (SimJobID)"])
         kNN_preds_after[actual_id] = df_actual_after[actual_id].unique()
-        kNN_preds_after["Prediction"] = model.predict(actual_feature_after)
-        kNN_preds_after_path = "/".join([output_path, "kNN_preds_validation.csv"])
+        kNN_preds_after["Prediction (SimJobID)"] = model.predict(actual_feature_after)
+        kNN_preds_after["Prediction (SimJobID)"] = kNN_preds_after["Prediction (SimJobID)"].astype(str)
+        kNN_preds_after = pd.merge(kNN_preds_after, building_params, left_on="Prediction (SimJobID)", right_on="#")
+        drop_col = ['Job_ID', 'index', '#'] 
+        kNN_preds_after.drop(columns=drop_col, inplace=True)
+        kNN_preds_after_path = "/".join([output_path, "kNN_predictions.csv"])
         kNN_preds_after.to_csv(kNN_preds_after_path, index=False) #binary classifications (1 = correct)
         #file for train and test IDs
         sub_path = f"{output_path}/KNN_train_test_IDs"
@@ -412,7 +416,6 @@ class EAudit:
         if plot_results:             
             plt_df = pd.DataFrame(kNN_rate)
             plt_df['Building_Feature'] = plt_df['Building_Feature'].astype(str)
-            # plt_df['Correct_Rate'] = plt_df['Correct_Rate'].astype(float)
             rate_color = [{p<0.25: 'crimson', 0.25<=p<=0.75: 'powderblue', p>0.75: 'steelblue'}[True] for p in plt_df['Correct_Rate']]      
             plt.figure(figsize=(10, 8))
             plt.bar(x='Building_Feature', height='Correct_Rate', data=plt_df, color=rate_color, edgecolor='black')
@@ -423,14 +426,14 @@ class EAudit:
             sns.set_style('whitegrid')
             sns.despine(left=True, bottom=True)
             plt.xticks(color='gray', size=14)
-            plt.title('Test Classification Rate', fontsize=20, weight='bold', color='gray')
+            plt.title('KNN Test Classification Rate', fontsize=20, weight='bold', color='gray')
             plt.xlabel('')
             plt.ylabel('')
             # Show the plot
-            plot_path = "/".join([output_path, "test_results.jpg"])
+            plot_path = "/".join([output_path, "test_results_KNN.jpg"])
             plt.savefig(plot_path)
 
-    def Euclidean(self, df_sim, simjob, output_path, df_actual_t, plot_results):
+    def Euclidean(self, df_sim, simjob, output_path, df_actual_t, actual_id, plot_results):
         np.random.seed(1)
         ridx = np.random.permutation(np.arange(len(df_sim)))
         cidx = int(len(df_sim)*0.8)
@@ -446,7 +449,7 @@ class EAudit:
         euc_dist_test.columns = train['Job_ID']
         euc_dist_test['Job_ID'] = euc_dist_test.apply(lambda x: x.idxmin(), axis=1) #select minimum distance as the closest match
         euc_dist_test['Job_ID_actual'] = test['Job_ID'].tolist()
-        output_test_path = "/".join([output_path, "euc_dist_test_mat.csv"])
+        output_test_path = "/".join([output_path, "euc_dist_test_dist_mat.csv"])
         filepath = Path(output_test_path)  
         filepath.parent.mkdir(parents=True, exist_ok=True)  
         euc_dist_test.to_csv(filepath, index=False)
@@ -461,7 +464,7 @@ class EAudit:
         euc_dist_test_preds.to_csv(output_test_preds_path, index=False)
         output_test_truth_path = "/".join([output_path, "euc_dist_test_true.csv"])
         euc_dist_test_truth.to_csv(output_test_truth_path, index=False)
-        #compute Euclidean distance - validation, after
+        #compute Euclidean distance - user input buildings
         actual2 = df_actual_t.iloc[:, :8760]
         actual2 = actual2.to_numpy()
         df_sim2 = df_sim.iloc[:, :8760]
@@ -470,27 +473,21 @@ class EAudit:
         euc_dist_after = pd.DataFrame(euc_dist_after)
         euc_dist_after.columns = df_sim['Job_ID']
         euc_dist_after['Job_ID'] = euc_dist_after.apply(lambda x: x.idxmin(), axis=1)
-        euc_dist_after['char_prem_id'] = df_actual_t['school_id'].tolist()
-        euc_dist_after_path = "/".join([output_path, "euc_dist_test_mat_validation.csv"])
+        euc_dist_after[actual_id] = df_actual_t[actual_id].tolist()
+        euc_dist_after_path = "/".join([output_path, "euc_dist_dist_mat.csv"])
         euc_dist_after.to_csv(euc_dist_after_path, index=False)
-        euc_dist_preds_after = euc_dist_after[["Job_ID"]]
-        euc_dist_truth_after = euc_dist_after[["char_prem_id"]]
-        euc_dist_preds_after_path = "/".join([output_path, "euc_dist_preds_validation.csv"])
-        euc_dist_preds_after.to_csv(euc_dist_preds_after_path, index=False)
-        euc_dist_truth_after_path = "/".join([output_path, "euc_dist_test_true_validation.csv"])
-        euc_dist_truth_after.to_csv(euc_dist_truth_after_path, index=False)
+        euc_dist_preds = euc_dist_after[[actual_id, "Job_ID"]]
+        euc_dist_preds = pd.merge(euc_dist_preds, simjob, on = "Job_ID")
+        drop_col = ['#'] 
+        euc_dist_preds.drop(columns=drop_col, inplace=True)
+        euc_dist_preds_path = "/".join([output_path, "euc_dist_predictions.csv"])
+        euc_dist_preds.to_csv(euc_dist_preds_path, index=False)
+        
         preds = euc_dist_test_preds
         truth = euc_dist_test_truth
         simjob_cols = simjob_cols = list(simjob.columns)
         simjob_cols.remove(simjob_cols[0])
-        #for loop for categories 
-        for col in simjob_cols:
-            if col in ['lightsched', 'roof', 'shgc', 'boiler']:
-                preds[col] = preds[col].astype('str')
-                truth[col] = truth[col].astype('str')
-            else:
-                preds[col] = preds[col].astype('category')
-                truth[col] = truth[col].astype('category')
+        
         list_features = simjob_cols 
         class_correct = pd.DataFrame(columns=list_features)
         for feature in list_features:
@@ -507,7 +504,6 @@ class EAudit:
         if plot_results:             
             plt_df = pd.DataFrame(correct_rate)
             plt_df['Building_Feature'] = plt_df['Building_Feature'].astype(str)
-            # plt_df['Correct_Rate'] = plt_df['Correct_Rate'].astype(float)
             rate_color = [{p<0.25: 'crimson', 0.25<=p<=0.75: 'powderblue', p>0.75: 'steelblue'}[True] for p in plt_df['Correct_Rate']]      
             plt.figure(figsize=(10, 8))
             plt.bar(x='Building_Feature', height='Correct_Rate', data=plt_df, color=rate_color, edgecolor='black')
@@ -518,14 +514,14 @@ class EAudit:
             sns.set_style('whitegrid')
             sns.despine(left=True, bottom=True)
             plt.xticks(color='gray', size=14)
-            plt.title('Test Classification Rate', fontsize=20, weight='bold', color='gray')
+            plt.title('Euclidean Test Classification Rate', fontsize=20, weight='bold', color='gray')
             plt.xlabel('')
             plt.ylabel('')
             # Show the plot
-            plot_path = "/".join([output_path, "test_results.jpg"])
+            plot_path = "/".join([output_path, "test_results_euc.jpg"])
             plt.savefig(plot_path)
 
-    def DecisionTrees(self, building_params, output_path, feature_vector, actual_feature_after, plot_results): 
+    def DecisionTrees(self, building_params, output_path, feature_vector, df_actual_after, actual_feature_after, actual_id, plot_results): 
         #split the data - 80/20 train/test split
         X_train, X_test, y_train, y_test = train_test_split(feature_vector, building_params,random_state=203,test_size=0.2,shuffle=True)
         y_test = y_test.reset_index(inplace=False)
@@ -541,6 +537,8 @@ class EAudit:
         multi_class_correct = pd.DataFrame(columns=list_features)
         multi_class_test_preds = pd.DataFrame(columns=list_features)
         mult_tree_preds_after = pd.DataFrame(columns=list_features)
+        mult_tree_preds_after[actual_id] = df_actual_after[actual_id].unique()
+
         id = y_test.Job_ID.unique()
         multi_class_test_preds.insert(0, 'Job_ID', id)
         multi_class_correct.insert(0, 'Job_ID', id)
@@ -571,13 +569,13 @@ class EAudit:
 
             correct_rates.append(multi_class_correct_rate[feature])
             building_features_list.append(feature)
-
-            mult_tree_preds_after[feature] = clf_feature.predict(actual_feature_after) #predictions on post-retrofit data
+            
+            mult_tree_preds_after[feature] = clf_feature.predict(actual_feature_after) #predictions on user's buildings data
 
             #create separate folders to contain all the features 
-            correct_path = f"{output_path}/multiple_trees_class_correct_features"
+            correct_path = f"{output_path}/multiple_trees_test_class_correct_features"
             Path(correct_path).mkdir(parents=True, exist_ok=True)
-            multi_class_correct_path = f"{correct_path}/class_correct_{feature}.csv"
+            multi_class_correct_path = f"{correct_path}/test_class_correct_{feature}.csv"
             multi_class_correct[[feature]].to_csv(multi_class_correct_path, index=False)
 
             test_preds_path = f"{output_path}/multiple_trees_test_preds_features"
@@ -590,9 +588,9 @@ class EAudit:
             y_test_path = f"{test_true_path}/test_true_{feature}.csv"
             y_test[[feature]].to_csv(y_test_path, index=False)
 
-            preds_validation = f"{output_path}/multiple_trees_preds_validation_features"
+            preds_validation = f"{output_path}/multiple_trees_predictions_features"
             Path(preds_validation).mkdir(parents=True, exist_ok=True)
-            preds_validation_path = f"{preds_validation}/preds_validation_{feature}.csv"
+            preds_validation_path = f"{preds_validation}/predictions_{feature}.csv"
             mult_tree_preds_after[[feature]].to_csv(preds_validation_path, index=False)
 
             test_rate_path = f"{output_path}/multiple_trees_test_rate_features"
@@ -604,7 +602,6 @@ class EAudit:
                 'Building_Feature': [feature]
             }).to_csv(rate_test_path, index=False)
 
-        #validation
         all_correct_rates_df = pd.DataFrame({
             'Building_Feature': building_features_list, 
             'Correct_Rate': correct_rates
@@ -615,18 +612,17 @@ class EAudit:
         y_test_preds_path = "/".join([output_path, "multiple_trees_test_true.csv"])
 
         y_test.to_csv(y_test_preds_path, index=False)
-        multi_class_correct_path = "/".join([output_path, "multiple_trees_class_correct.csv"])
+        multi_class_correct_path = "/".join([output_path, "multiple_trees_test_class_correct.csv"])
         multi_class_correct.to_csv(multi_class_correct_path, index=False) 
         multiple_trees_rate_path = f"{output_path}/multiple_trees_test_rate.csv"
 
         all_correct_rates_df.to_csv(multiple_trees_rate_path, index=False)
-        mult_tree_preds_after_path = "/".join([output_path, "multiple_trees_preds_validation.csv"])
+        mult_tree_preds_after_path = "/".join([output_path, "multiple_trees_predictions.csv"])
         mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
 
         if plot_results:             
             plt_df = pd.DataFrame(all_correct_rates_df)
             plt_df['Building_Feature'] = plt_df['Building_Feature'].astype(str)
-            # plt_df['Correct_Rate'] = plt_df['Correct_Rate'].astype(float)
             rate_color = [{p<0.25: 'crimson', 0.25<=p<=0.75: 'powderblue', p>0.75: 'steelblue'}[True] for p in plt_df['Correct_Rate']]      
             plt.figure(figsize=(10, 8))
             plt.bar(x='Building_Feature', height='Correct_Rate', data=plt_df, color=rate_color, edgecolor='black')
@@ -637,9 +633,9 @@ class EAudit:
             sns.set_style('whitegrid')
             sns.despine(left=True, bottom=True)
             plt.xticks(color='gray', size=14)
-            plt.title('Test Classification Rate', fontsize=20, weight='bold', color='gray')
+            plt.title('Decision Trees Test Classification Rate', fontsize=20, weight='bold', color='gray')
             plt.xlabel('')
             plt.ylabel('')
             # Show the plot
-            plot_path = "/".join([output_path, "test_results.jpg"])
+            plot_path = "/".join([output_path, "test_results_DT.jpg"])
             plt.savefig(plot_path)
