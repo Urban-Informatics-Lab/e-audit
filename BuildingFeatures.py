@@ -23,6 +23,8 @@ from scipy import spatial
 import os 
 from pathlib import Path  
 from dateutil import parser
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def extract_datetime(date_str1):
   #date = datetime.strptime(date_str, ' %m/%d  %H:%M:%S')
@@ -108,24 +110,25 @@ class EAudit:
         actual_col = kwargs.get('actual_col')
         sq_ft = kwargs.get('sq_ft')
         J_conv = kwargs.get('J_conv')
+        plot_results = kwargs.get('plot_results')
 
         if self.alg == 'Euc':
             df_sim, simjob = self.format_simdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
             df_actual_t = self.format_sim_actualdata(actual_path, actual_id, actual_date, actual_col) 
-            self.Euclidean(df_sim, simjob, output_path, df_actual_t)
+            self.Euclidean(df_sim, simjob, output_path, df_actual_t, plot_results)
 
         elif self.alg == 'KNN':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
-            self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_col, actual_date, actual_id)
-
+            self.KNN(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after, actual_id, plot_results)
         elif self.alg == 'DT':
             df_sim, building_params, feature_vector, job_id, simjob_str = self.format_MLdata(meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv)
             df_actual_t, df_actual_after = self.format_ML_actualdata(actual_path, actual_id, actual_col, actual_date)
-            self.DecisionTrees(building_params, output_path, feature_vector, job_id, simjob_str, df_actual_t, df_actual_after)
+            self.DecisionTrees(building_params, output_path, feature_vector, df_actual_after, plot_results)
 
         else: 
             print("Invalid Algorithm Input. Please provide 'Euc', 'KNN', or 'DT.'")
+ 
 
     def format_simdata(self, meter_path, meter_col, sim_job_path, meter_date, sq_ft, J_conv):
         if os.path.isfile(meter_path):
@@ -343,7 +346,7 @@ class EAudit:
         building_params = building_params.reset_index()
         return df_sim, building_params, feature_vector, job_id, simjob_str
     
-    def KNN(self, building_params, output_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after, actual_col, actual_date, actual_id):
+    def KNN(self, building_params, output_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after, actual_id, plot_results):
         Path(output_path).mkdir(parents=True, exist_ok=True)
         #kNN classifying
         le = preprocessing.LabelEncoder()
@@ -390,7 +393,6 @@ class EAudit:
         kNN_rate = kNN_class_correct.mean(numeric_only=True) #binary classifications (1 = correct)
         kNN_rate = kNN_rate.reset_index()
         kNN_rate.columns = ['Building_Feature', 'Correct_Rate']
-        kNN_rate = kNN_rate.iloc[1:, :].reset_index(drop=True)
         kNN_rate_correct = "/".join([output_path, "kNN_test_rate.csv"])
         kNN_rate.to_csv(kNN_rate_correct, index=False) 
         #validation  
@@ -407,7 +409,28 @@ class EAudit:
         y_test_path = "/".join([sub_path, "kNN_test_IDs.csv"])
         np.savetxt(y_test_path, y_test, delimiter=',', fmt='%s', header='Test_ID', comments='')
 
-    def Euclidean(self, df_sim, simjob, output_path, df_actual_t):
+        if plot_results:             
+            plt_df = pd.DataFrame(kNN_rate)
+            plt_df['Building_Feature'] = plt_df['Building_Feature'].astype(str)
+            # plt_df['Correct_Rate'] = plt_df['Correct_Rate'].astype(float)
+            rate_color = [{p<0.25: 'crimson', 0.25<=p<=0.75: 'powderblue', p>0.75: 'steelblue'}[True] for p in plt_df['Correct_Rate']]      
+            plt.figure(figsize=(10, 8))
+            plt.bar(x='Building_Feature', height='Correct_Rate', data=plt_df, color=rate_color, edgecolor='black')
+            for y in [0, 0.25, 0.5, 0.75, 1]:
+                plt.axhline(y=y, color='lightgrey')
+            plt.ylim(-0.05, 1.3)
+            plt.yticks([0, 0.5, 1.0])
+            sns.set_style('whitegrid')
+            sns.despine(left=True, bottom=True)
+            plt.xticks(color='gray', size=14)
+            plt.title('Test Classification Rate', fontsize=20, weight='bold', color='gray')
+            plt.xlabel('')
+            plt.ylabel('')
+            # Show the plot
+            plot_path = "/".join([output_path, "test_results.jpg"])
+            plt.savefig(plot_path)
+
+    def Euclidean(self, df_sim, simjob, output_path, df_actual_t, plot_results):
         np.random.seed(1)
         ridx = np.random.permutation(np.arange(len(df_sim)))
         cidx = int(len(df_sim)*0.8)
@@ -481,7 +504,28 @@ class EAudit:
         correct_rate = correct_rate.iloc[1: , :]
         correct_rate.to_csv(correct_rate_path, index=False)
 
-    def DecisionTrees(self, building_params, output_path, feature_vector, job_id, simjob_str, df_actual_after, actual_feature_after): 
+        if plot_results:             
+            plt_df = pd.DataFrame(correct_rate)
+            plt_df['Building_Feature'] = plt_df['Building_Feature'].astype(str)
+            # plt_df['Correct_Rate'] = plt_df['Correct_Rate'].astype(float)
+            rate_color = [{p<0.25: 'crimson', 0.25<=p<=0.75: 'powderblue', p>0.75: 'steelblue'}[True] for p in plt_df['Correct_Rate']]      
+            plt.figure(figsize=(10, 8))
+            plt.bar(x='Building_Feature', height='Correct_Rate', data=plt_df, color=rate_color, edgecolor='black')
+            for y in [0, 0.25, 0.5, 0.75, 1]:
+                plt.axhline(y=y, color='lightgrey')
+            plt.ylim(-0.05, 1.3)
+            plt.yticks([0, 0.5, 1.0])
+            sns.set_style('whitegrid')
+            sns.despine(left=True, bottom=True)
+            plt.xticks(color='gray', size=14)
+            plt.title('Test Classification Rate', fontsize=20, weight='bold', color='gray')
+            plt.xlabel('')
+            plt.ylabel('')
+            # Show the plot
+            plot_path = "/".join([output_path, "test_results.jpg"])
+            plt.savefig(plot_path)
+
+    def DecisionTrees(self, building_params, output_path, feature_vector, actual_feature_after, plot_results): 
         #split the data - 80/20 train/test split
         X_train, X_test, y_train, y_test = train_test_split(feature_vector, building_params,random_state=203,test_size=0.2,shuffle=True)
         y_test = y_test.reset_index(inplace=False)
@@ -579,17 +623,23 @@ class EAudit:
         mult_tree_preds_after_path = "/".join([output_path, "multiple_trees_preds_validation.csv"])
         mult_tree_preds_after.to_csv(path_or_buf = mult_tree_preds_after_path, index=False)
 
-ea = EAudit('KNN')
-ea.process_alg(
-    meter_path = "/Users/dipashreyasur/Desktop/BF_run/Meters_Example.csv",
-    meter_col = "Electricity:Facility [J](Hourly)",
-    meter_date = "01/01/2014",
-    sim_job_path = "/Users/dipashreyasur/Desktop/BF_run/SimJobIndex_Example.csv",
-    actual_path = "/Users/dipashreyasur/Desktop/BF_run/Sample Building Electricity Data.csv",
-    actual_id = "ID",
-    actual_date = "Date.Time",
-    actual_col = "kWh_norm_sf",
-    sq_ft = 210887,
-    J_conv = 0, 
-    output_path = "/Users/dipashreyasur/Desktop/Output_files/KNN"
-)
+        if plot_results:             
+            plt_df = pd.DataFrame(all_correct_rates_df)
+            plt_df['Building_Feature'] = plt_df['Building_Feature'].astype(str)
+            # plt_df['Correct_Rate'] = plt_df['Correct_Rate'].astype(float)
+            rate_color = [{p<0.25: 'crimson', 0.25<=p<=0.75: 'powderblue', p>0.75: 'steelblue'}[True] for p in plt_df['Correct_Rate']]      
+            plt.figure(figsize=(10, 8))
+            plt.bar(x='Building_Feature', height='Correct_Rate', data=plt_df, color=rate_color, edgecolor='black')
+            for y in [0, 0.25, 0.5, 0.75, 1]:
+                plt.axhline(y=y, color='lightgrey')
+            plt.ylim(-0.05, 1.3)
+            plt.yticks([0, 0.5, 1.0])
+            sns.set_style('whitegrid')
+            sns.despine(left=True, bottom=True)
+            plt.xticks(color='gray', size=14)
+            plt.title('Test Classification Rate', fontsize=20, weight='bold', color='gray')
+            plt.xlabel('')
+            plt.ylabel('')
+            # Show the plot
+            plot_path = "/".join([output_path, "test_results.jpg"])
+            plt.savefig(plot_path)
