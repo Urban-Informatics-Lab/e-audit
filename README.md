@@ -24,7 +24,8 @@ The classification functions can take the electricity load profile from a buildi
 
 ## Usage
 An environment YAML file has been provided with the packages used to run this code. To create a conda environment using this file, run `conda env create -n <env_name> -f environment.yaml` in the terminal, inserting the name of your environment in place of `<env_name>`. This package runs on Python 3.8 or newer. 
-*Note: the scikit-learn package may have an error when installing from the environment file. In this case, run `pip install scikit-learn` once the environment is activated*
+
+*Note: the scikit-learn package may have an error when installing from the environment file. In this case, run `pip install scikit-learn` once the environment is activated.*
 
 After importing the package, create an instance of the EAudit class. The EAudit class has a constructor that takes in the algorithm type as a parameter. For the algorithm type parameter, input ‘KNN’ for k-nearest neighbors, ‘DT’ for decision trees, or ‘Euc’ for Euclidean. 
 
