@@ -27,14 +27,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 def extract_datetime(date_str1):
-  #date = datetime.strptime(date_str, ' %m/%d  %H:%M:%S')
   date_str1 = date_str1.replace(' 24:00:00', ' 00:00:00')
   date = parser.parse(date_str1)
-  return date #.replace(year=2014)
+  return date 
 
 def time_stats(group):
   new_grp = group
-  new_grp['date'] = new_grp['Date/Time'] #.apply(extract_datetime)
+  new_grp['date'] = new_grp['Date/Time'] 
   new_grp['month'] = new_grp['date'].apply(lambda d: d.month)
   new_grp['week'] = new_grp['date'].apply(lambda d: d.isocalendar()[1])
   new_grp['day'] = new_grp['date'].apply(lambda d: d.timetuple().tm_yday)
@@ -178,7 +177,7 @@ class EAudit:
             else: 
                 hourly_periods = 8760
             drange = pd.date_range(start, periods=hourly_periods, freq='H')
-            df_sim = pd.DataFrame(0., index=np.arange(len(meter_files)), columns=drange.astype(str).tolist())#+['Job_ID'])
+            df_sim = pd.DataFrame(0., index=np.arange(len(meter_files)), columns=drange.astype(str).tolist())
             i=0
             names = []
             for f in meter_files:

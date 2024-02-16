@@ -40,7 +40,7 @@ Next, use the `process_alg()` method to generate the building feature classifica
 - Actual data - building id (*str*)
 - Actual data - date column (*str*)
 - sq_ft (*int*) - square footage of simulated building
-- J_conversion (*int*) - 1 if conversion is needed from J to kWh, 0 if not 
+- J_conversion (*int*) - 1 if `meter_col` is in J, 0 if `meter_col` is in kWh
 - Output files - file path (*str*) 
 - Plot results (*True or False*) 
 
@@ -59,7 +59,7 @@ Let's create `ea` as an instance of the EAudit class to run the k-nearest neighb
         actual_date = "Date.Time",
         actual_col = "kWh_norm_sf",
         sq_ft = 2000,
-        J_conv = 0    
+        J_conv = 1,    
         output_path = "/Path_to/Output_files", 
         plot_results = True
     )
